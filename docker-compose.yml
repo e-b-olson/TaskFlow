@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - db-data:/app/data
+    environment:
+      - NODE_ENV=development
+      - JWT_SECRET=change-me-in-production
+      - DB_PATH=/app/data/todo.db
+
+volumes:
+  db-data:
