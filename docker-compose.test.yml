@@ -1,0 +1,70 @@
+services:
+  test-db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=todo_test_user
+      - POSTGRES_PASSWORD=todo_test_pass
+      - POSTGRES_DB=todo_test_db
+    ports:
+      - "5434:5432"
+    networks:
+      - test-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo_test_user -d todo_test_db"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  test-api:
+    build: ./python-api
+    ports:
+      - "5002:5000"
+    volumes:
+      - ./public:/app/public
+    environment:
+      - FLASK_ENV=testing
+      - JWT_SECRET=test-secret
+      - DATABASE_URL=postgresql://todo_test_user:todo_test_pass@test-db:5432/todo_test_db
+      - STATIC_DIR=/app/public
+    networks:
+      - test-net
+    depends_on:
+      test-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:5000/\")'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # API unit tests (pytest)
+  api-tests:
+    build:
+      context: ./python-api
+      dockerfile: Dockerfile.test
+    environment:
+      - TEST_DATABASE_URL=postgresql://todo_test_user:todo_test_pass@test-db:5432/todo_test_db
+    networks:
+      - test-net
+    depends_on:
+      test-db:
+        condition: service_healthy
+    profiles:
+      - api-tests
+
+  # UI end-to-end tests (Playwright)
+  e2e-tests:
+    build: ./e2e
+    environment:
+      - BASE_URL=http://test-api:5000
+    networks:
+      - test-net
+    depends_on:
+      test-api:
+        condition: service_healthy
+    profiles:
+      - e2e-tests
+
+networks:
+  test-net:
+    name: todo-test-net

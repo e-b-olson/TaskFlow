@@ -125,6 +125,83 @@ header h1 {
 
 #user-greeting { color: var(--text-muted); }
 
+/* Hamburger Menu */
+.hamburger-menu {
+  position: relative;
+}
+
+.hamburger-btn {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  padding: 6px;
+  transition: background 0.2s;
+}
+
+.hamburger-btn:hover {
+  background: var(--bg);
+}
+
+.hamburger-icon {
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: var(--text);
+  border-radius: 1px;
+}
+
+.hamburger-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  z-index: 200;
+  overflow: hidden;
+}
+
+.hamburger-item {
+  display: block;
+  width: 100%;
+  padding: 0.65rem 1rem;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--text);
+  transition: background 0.15s;
+}
+
+.hamburger-item:hover {
+  background: var(--bg);
+}
+
+.hamburger-item-danger {
+  color: var(--danger);
+}
+
+.hamburger-item-danger:hover {
+  background: #fef2f2;
+}
+
+.hamburger-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0.25rem 0;
+}
+
 /* Tabs */
 .tabs {
   display: flex;
@@ -209,10 +286,10 @@ header h1 {
   background: var(--danger);
   color: white;
   border: none;
-  padding: 0.4rem 0.8rem;
+  padding: 0.6rem 1.2rem;
   border-radius: var(--radius);
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
 }
 
 .btn-small {
@@ -286,6 +363,42 @@ header h1 {
   font-size: 0.8rem;
   color: var(--text-muted);
   margin-top: 0.5rem;
+}
+
+/* Task Detail */
+.task-detail-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+  border-left: 4px solid var(--border);
+  margin-top: 1rem;
+}
+
+.task-detail-card.priority-HIGH { border-left-color: var(--danger); }
+.task-detail-card.priority-MEDIUM { border-left-color: var(--warning); }
+.task-detail-card.priority-LOW { border-left-color: var(--success); }
+
+.task-detail-card h2 { margin-bottom: 0.5rem; }
+
+.task-detail-description {
+  color: var(--text-muted);
+  margin: 0.75rem 0;
+}
+
+.task-detail-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  font-size: 0.9rem;
+}
+
+.task-detail-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
 }
 
 /* Lists */
@@ -405,6 +518,20 @@ header h1 {
   margin-top: 1.5rem;
 }
 
+.modal-actions-split {
+  justify-content: space-between;
+}
+
+.modal-actions-left {
+  display: flex;
+  align-items: center;
+}
+
+.modal-actions-right {
+  display: flex;
+  gap: 0.75rem;
+}
+
 /* List Detail */
 #list-detail-content {
   margin-top: 1rem;
@@ -412,6 +539,31 @@ header h1 {
 
 #list-detail-content h2 { margin-bottom: 0.5rem; }
 #list-detail-content .list-description { color: var(--text-muted); margin-bottom: 1rem; }
+
+.list-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.btn-icon {
+  background: none;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: var(--radius);
+  transition: background 0.15s;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+
+.btn-icon:hover {
+  background: var(--bg);
+}
 
 .list-task-item {
   display: flex;

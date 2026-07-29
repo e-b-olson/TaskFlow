@@ -31,11 +31,18 @@ app.get("*", (req, res) => {
 });
 
 // Initialize database and start server
-initializeDatabase();
-console.log("Database initialized");
+async function start() {
+  await initializeDatabase();
+  console.log("Database initialized");
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+start().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
 });
 
 export default app;

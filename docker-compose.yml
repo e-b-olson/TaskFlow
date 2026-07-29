@@ -6,11 +6,61 @@ services:
     volumes:
       - ./src:/app/src
       - ./public:/app/public
-      - db-data:/app/data
     environment:
       - NODE_ENV=development
-      - JWT_SECRET=change-me-in-production
-      - DB_PATH=/app/data/todo.db
+      - JWT_SECRET=${JWT_SECRET}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  python-api:
+    build: ./python-api
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./python-api:/app
+      - ./public:/app/public
+    environment:
+      - FLASK_ENV=development
+      - JWT_SECRET=${JWT_SECRET}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - STATIC_DIR=/app/public
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build: .
+    volumes:
+      - db-data:/app/data
+      - ./scripts:/app/scripts
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - SQLITE_PATH=/app/data/todo.db
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["node", "scripts/migrate-data.js"]
+    profiles:
+      - migration
 
 volumes:
+  pgdata:
   db-data:

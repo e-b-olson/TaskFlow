@@ -24,6 +24,35 @@ async function api(path, options = {}) {
   return res.json();
 }
 
+// Hamburger Menu
+function toggleHamburgerMenu() {
+  const dropdown = document.getElementById("hamburger-dropdown");
+  const btn = document.querySelector(".hamburger-btn");
+  const isOpen = !dropdown.classList.contains("hidden");
+
+  if (isOpen) {
+    closeHamburgerMenu();
+  } else {
+    dropdown.classList.remove("hidden");
+    btn.setAttribute("aria-expanded", "true");
+  }
+}
+
+function closeHamburgerMenu() {
+  const dropdown = document.getElementById("hamburger-dropdown");
+  const btn = document.querySelector(".hamburger-btn");
+  dropdown.classList.add("hidden");
+  btn.setAttribute("aria-expanded", "false");
+}
+
+// Close hamburger menu when clicking outside
+document.addEventListener("click", function (e) {
+  const menu = document.querySelector(".hamburger-menu");
+  if (menu && !menu.contains(e.target)) {
+    closeHamburgerMenu();
+  }
+});
+
 // Auth
 function showRegister() {
   document.getElementById("login-form").classList.add("hidden");
@@ -152,7 +181,7 @@ function renderTasks(tasks) {
   }
 
   container.innerHTML = tasks.map((task) => `
-    <div class="task-card priority-${task.priority}">
+    <div class="task-card priority-${task.priority}" onclick="viewTask(${task.id})" style="cursor: pointer;">
       <h3>${escapeHtml(task.title)}</h3>
       ${task.description ? `<p class="task-description">${escapeHtml(task.description)}</p>` : ""}
       <div class="task-meta">
@@ -166,12 +195,6 @@ function renderTasks(tasks) {
         ${task.cost ? ` 💰 $${task.cost}` : ""}
       </div>
       ${task.materials ? `<div class="task-details">🛠 ${escapeHtml(task.materials)}</div>` : ""}
-      <div class="task-actions">
-        <button class="btn-secondary btn-small" onclick="editTask(${task.id})">Edit</button>
-        <button class="btn-secondary btn-small" onclick="cloneTask(${task.id})">Clone</button>
-        <button class="btn-secondary btn-small" onclick="showAddToList(${task.id})">Add to List</button>
-        <button class="btn-danger btn-small" onclick="deleteTask(${task.id})">Delete</button>
-      </div>
     </div>
   `).join("");
 }
@@ -179,6 +202,51 @@ function renderTasks(tasks) {
 function debounceSearch() {
   clearTimeout(searchTimeout);
   searchTimeout = setTimeout(loadTasks, 300);
+}
+
+// Task Detail View
+async function viewTask(id) {
+  try {
+    const task = await api(`/tasks/${id}`);
+
+    document.querySelector("#tasks-tab .toolbar").classList.add("hidden");
+    document.getElementById("tasks-list").classList.add("hidden");
+    document.getElementById("task-detail").classList.remove("hidden");
+
+    const content = document.getElementById("task-detail-content");
+    content.innerHTML = `
+      <div class="task-detail-card priority-${task.priority}">
+        <h2>${escapeHtml(task.title)}</h2>
+        ${task.description ? `<p class="task-detail-description">${escapeHtml(task.description)}</p>` : ""}
+        <div class="task-meta" style="margin: 1rem 0;">
+          <span class="badge badge-status-${task.status}">${formatStatus(task.status)}</span>
+          <span class="badge badge-priority-${task.priority}">${task.priority}</span>
+          <span class="badge badge-effort">${task.effort} effort</span>
+        </div>
+        <div class="task-detail-info">
+          ${task.time_estimate_minutes ? `<div>⏱ <strong>Time Estimate:</strong> ${task.time_estimate_minutes} min</div>` : ""}
+          ${task.deadline ? `<div>📅 <strong>Deadline:</strong> ${formatDate(task.deadline)}</div>` : ""}
+          ${task.cost ? `<div>💰 <strong>Cost:</strong> $${task.cost}</div>` : ""}
+          ${task.materials ? `<div>🛠 <strong>Materials:</strong> ${escapeHtml(task.materials)}</div>` : ""}
+        </div>
+        <div class="task-detail-actions">
+          <button class="btn-primary" onclick="editTask(${task.id})">Edit</button>
+          <button class="btn-secondary" onclick="cloneTask(${task.id})">Clone</button>
+          <button class="btn-secondary" onclick="showAddToList(${task.id})">Add to List</button>
+          <button class="btn-danger" onclick="deleteTask(${task.id})">Delete</button>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+function closeTaskDetail() {
+  document.querySelector("#tasks-tab .toolbar").classList.remove("hidden");
+  document.getElementById("tasks-list").classList.remove("hidden");
+  document.getElementById("task-detail").classList.add("hidden");
+  loadTasks();
 }
 
 // Task Modal
@@ -227,7 +295,14 @@ async function saveTask() {
       await api("/tasks", { method: "POST", body: JSON.stringify(data) });
     }
     closeTaskModal();
-    loadTasks();
+
+    // If task detail is visible, refresh it; otherwise reload the task list
+    const taskDetail = document.getElementById("task-detail");
+    if (id && taskDetail && !taskDetail.classList.contains("hidden")) {
+      viewTask(id);
+    } else {
+      loadTasks();
+    }
   } catch (err) {
     alert(err.message);
   }
@@ -245,6 +320,7 @@ async function editTask(id) {
 async function cloneTask(id) {
   try {
     await api(`/tasks/${id}/clone`, { method: "POST" });
+    closeTaskDetail();
     loadTasks();
   } catch (err) {
     alert(err.message);
@@ -255,6 +331,7 @@ async function deleteTask(id) {
   if (!confirm("Delete this task? This will also remove it from any lists.")) return;
   try {
     await api(`/tasks/${id}`, { method: "DELETE" });
+    closeTaskDetail();
     loadTasks();
   } catch (err) {
     alert(err.message);
@@ -301,12 +378,11 @@ async function viewList(id) {
 
     const content = document.getElementById("list-detail-content");
     content.innerHTML = `
-      <h2>${escapeHtml(list.name)}</h2>
-      ${list.description ? `<p class="list-description">${escapeHtml(list.description)}</p>` : ""}
-      <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem;">
-        <button class="btn-primary btn-small" onclick="editListModal(${list.id})">Edit List</button>
-        <button class="btn-danger btn-small" onclick="deleteList(${list.id})">Delete List</button>
+      <div class="list-detail-header">
+        <h2>${escapeHtml(list.name)}</h2>
+        <button class="btn-icon" onclick="editListModal(${list.id})" aria-label="Edit list" title="Edit list"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z"/></svg></button>
       </div>
+      ${list.description ? `<p class="list-description">${escapeHtml(list.description)}</p>` : ""}
       ${list.tasks.length === 0
         ? '<p style="color: var(--text-muted);">No tasks in this list yet. Click "Edit List" to add tasks.</p>'
         : list.tasks.map((task) => `
@@ -439,6 +515,7 @@ async function showListModal() {
   document.getElementById("list-description").value = "";
   document.getElementById("list-task-search").value = "";
   document.getElementById("list-save-btn").textContent = "Create";
+  document.getElementById("list-delete-btn").style.display = "none";
 
   await fetchAllTasks();
   renderTaskSelector([]);
@@ -458,6 +535,7 @@ async function editListModal(listId) {
     document.getElementById("list-description").value = list.description || "";
     document.getElementById("list-task-search").value = "";
     document.getElementById("list-save-btn").textContent = "Save Changes";
+    document.getElementById("list-delete-btn").style.display = "inline-block";
 
     const currentTaskIds = list.tasks.map((t) => t.id);
     renderTaskSelector(currentTaskIds);
@@ -585,6 +663,19 @@ async function deleteList(id) {
   if (!confirm("Delete this list? Tasks will not be deleted.")) return;
   try {
     await api(`/lists/${id}`, { method: "DELETE" });
+    loadLists();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function deleteListFromModal() {
+  const listId = document.getElementById("list-edit-id").value;
+  if (!listId) return;
+  if (!confirm("Delete this list? Tasks will not be deleted.")) return;
+  try {
+    await api(`/lists/${listId}`, { method: "DELETE" });
+    closeListModal();
     loadLists();
   } catch (err) {
     alert(err.message);

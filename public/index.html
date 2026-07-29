@@ -40,7 +40,19 @@
         <h1>TaskFlow</h1>
         <div class="header-right">
           <span id="user-greeting"></span>
-          <button onclick="handleLogout()" class="btn-secondary">Logout</button>
+          <div class="hamburger-menu">
+            <button class="hamburger-btn" onclick="toggleHamburgerMenu()" aria-label="Menu" aria-expanded="false" aria-controls="hamburger-dropdown">
+              <span class="hamburger-icon"></span>
+              <span class="hamburger-icon"></span>
+              <span class="hamburger-icon"></span>
+            </button>
+            <div id="hamburger-dropdown" class="hamburger-dropdown hidden" role="menu">
+              <button class="hamburger-item" onclick="showListModal(); closeHamburgerMenu()" role="menuitem">New List</button>
+              <button class="hamburger-item" onclick="showTaskModal(); closeHamburgerMenu()" role="menuitem">New Task</button>
+              <div class="hamburger-divider"></div>
+              <button class="hamburger-item hamburger-item-danger" onclick="handleLogout()" role="menuitem">Logout</button>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -52,9 +64,6 @@
 
       <!-- Lists Tab -->
       <div id="lists-tab" class="tab-content">
-        <div class="toolbar">
-          <button onclick="showListModal()" class="btn-primary">+ New List</button>
-        </div>
         <div id="lists-container"></div>
         <div id="list-detail" class="hidden">
           <button onclick="closeListDetail()" class="btn-secondary">&larr; Back to Lists</button>
@@ -65,7 +74,6 @@
       <!-- Tasks Tab -->
       <div id="tasks-tab" class="tab-content hidden">
         <div class="toolbar">
-          <button onclick="showTaskModal()" class="btn-primary">+ New Task</button>
           <div class="filters">
             <select id="filter-status" onchange="loadTasks()">
               <option value="">All Status</option>
@@ -102,6 +110,10 @@
           </div>
         </div>
         <div id="tasks-list" class="tasks-grid"></div>
+        <div id="task-detail" class="hidden">
+          <button onclick="closeTaskDetail()" class="btn-secondary">&larr; Back to Tasks</button>
+          <div id="task-detail-content"></div>
+        </div>
       </div>
 
       <!-- Smart Builder Tab -->
@@ -256,9 +268,14 @@
           </div>
           <div id="list-task-selector" class="task-selector"></div>
         </div>
-        <div class="modal-actions">
-          <button onclick="closeListModal()" class="btn-secondary">Cancel</button>
-          <button onclick="saveList()" class="btn-primary" id="list-save-btn">Create</button>
+        <div class="modal-actions modal-actions-split">
+          <div class="modal-actions-left">
+            <button onclick="deleteListFromModal()" class="btn-danger" id="list-delete-btn" style="display:none;">Delete List</button>
+          </div>
+          <div class="modal-actions-right">
+            <button onclick="closeListModal()" class="btn-secondary">Cancel</button>
+            <button onclick="saveList()" class="btn-primary" id="list-save-btn">Create</button>
+          </div>
         </div>
       </div>
     </div>
