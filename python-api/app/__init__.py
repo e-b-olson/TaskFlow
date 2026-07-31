@@ -49,6 +49,10 @@ def create_app():
     def serve_frontend(path):
         if path and os.path.exists(os.path.join(static_dir, path)):
             return send_from_directory(static_dir, path)
+        # Only serve index.html for routes without a file extension (SPA navigation)
+        # Requests for missing static files should get a 404, not index.html
+        if path and "." in path.split("/")[-1]:
+            return "Not found", 404
         return _serve_index()
 
     return app

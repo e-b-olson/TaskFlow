@@ -44,10 +44,13 @@ app.use("/api/tasks", taskRoutes);
 app.use("/api/lists", listRoutes);
 app.use("/api/smart-list", smartListRoutes);
 
-// SPA fallback - serve index.html for non-API routes
+// SPA fallback - serve index.html for non-API routes (skip static file requests)
 app.get("*", (req, res) => {
-  if (!req.path.startsWith("/api")) {
+  if (!req.path.startsWith("/api") && !path.extname(req.path)) {
     serveIndex(req, res);
+  } else if (!req.path.startsWith("/api")) {
+    // Static file not found — send 404 instead of index.html
+    res.status(404).send("Not found");
   }
 });
 
