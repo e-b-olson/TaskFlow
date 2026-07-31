@@ -17,8 +17,8 @@ const publicDir = path.join(__dirname, "..", "public");
 app.use(cors());
 app.use(express.json());
 
-// Serve static frontend files
-app.use(express.static(publicDir));
+// Serve static frontend files (index: false ensures index.html goes through SPA handler for path injection)
+app.use(express.static(publicDir, { index: false }));
 
 // API routes
 app.use("/api/auth", authRoutes);
