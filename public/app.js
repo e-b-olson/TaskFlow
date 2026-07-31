@@ -1,5 +1,8 @@
-// Derive base path from the served page location
-const BASE_PATH = document.querySelector('base') ? new URL(document.querySelector('base').href).pathname.replace(/\/$/, '') : '';
+// Derive base path from the script's own src attribute
+// The server replaces __BASE_PATH__ with the actual prefix (e.g. "/taskflow" or "")
+const BASE_PATH = document.currentScript
+  ? new URL(document.currentScript.src).pathname.replace(/\/app\.js$/, '')
+  : '';
 
 // State
 let token = localStorage.getItem("token");

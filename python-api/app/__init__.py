@@ -28,17 +28,14 @@ def create_app():
     app.register_blueprint(smart_list_bp, url_prefix="/api/smart-list")
 
     def _serve_index():
-        """Serve index.html with <base> tag injected for subpath hosting."""
+        """Serve index.html with base path placeholder replaced."""
         prefix = request.headers.get("X-Forwarded-Prefix", os.environ.get("BASE_PATH", ""))
-        base_path = prefix.rstrip("/") + "/"
+        base_path = prefix.rstrip("/")
+
         index_path = os.path.join(static_dir, "index.html")
-
-        if base_path == "/":
-            return send_from_directory(static_dir, "index.html")
-
         with open(index_path, "r") as f:
             html = f.read()
-        html = html.replace("<head>", f'<head>\n  <base href="{base_path}">', 1)
+        html = html.replace("__BASE_PATH__", base_path)
         resp = make_response(html)
         resp.headers["Content-Type"] = "text/html; charset=utf-8"
         return resp

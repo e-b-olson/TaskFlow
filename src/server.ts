@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import path from "path";
+import fs from "fs";
 import { initializeDatabase } from "./database";
 import authRoutes from "./routes/auth";
 import taskRoutes from "./routes/tasks";
@@ -9,34 +10,15 @@ import smartListRoutes from "./routes/smart-list";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Base path for reverse proxy subpath hosting (e.g. "/taskflow")
-// Set via BASE_PATH env var or X-Forwarded-Prefix header
 const BASE_PATH = (process.env.BASE_PATH || "").replace(/\/+$/, "");
+const publicDir = path.join(__dirname, "..", "public");
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Inject <base> tag into index.html so the frontend resolves assets and API calls correctly
-function serveIndex(req: express.Request, res: express.Response) {
-  const prefix = req.headers["x-forwarded-prefix"] as string || BASE_PATH || "";
-  const basePath = prefix.replace(/\/+$/, "") + "/";
-  const indexPath = path.join(__dirname, "..", "public", "index.html");
-
-  if (basePath === "/") {
-    return res.sendFile(indexPath);
-  }
-
-  // Read and inject <base href> tag
-  const fs = require("fs");
-  let html = fs.readFileSync(indexPath, "utf-8");
-  html = html.replace("<head>", `<head>\n  <base href="${basePath}">`);
-  res.type("html").send(html);
-}
-
 // Serve static frontend files
-app.use(express.static(path.join(__dirname, "..", "public")));
+app.use(express.static(publicDir));
 
 // API routes
 app.use("/api/auth", authRoutes);
@@ -44,14 +26,24 @@ app.use("/api/tasks", taskRoutes);
 app.use("/api/lists", listRoutes);
 app.use("/api/smart-list", smartListRoutes);
 
-// SPA fallback - serve index.html for non-API routes (skip static file requests)
+// SPA fallback - serve index.html for non-API routes
 app.get("*", (req, res) => {
-  if (!req.path.startsWith("/api") && !path.extname(req.path)) {
-    serveIndex(req, res);
-  } else if (!req.path.startsWith("/api")) {
-    // Static file not found — send 404 instead of index.html
-    res.status(404).send("Not found");
+  if (req.path.startsWith("/api")) return;
+
+  // If it looks like a static file request (has extension), 404
+  if (path.extname(req.path)) {
+    return res.status(404).send("Not found");
   }
+
+  // Determine base path from X-Forwarded-Prefix header or env
+  const prefix = (req.headers["x-forwarded-prefix"] as string) || BASE_PATH || "";
+  const basePath = prefix.replace(/\/+$/, "");
+
+  // Read index.html and replace the placeholder with the actual base path
+  const indexPath = path.join(publicDir, "index.html");
+  let html = fs.readFileSync(indexPath, "utf-8");
+  html = html.replace(/__BASE_PATH__/g, basePath);
+  res.type("html").send(html);
 });
 
 // Initialize database and start server
