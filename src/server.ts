@@ -10,9 +10,30 @@ import smartListRoutes from "./routes/smart-list";
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Base path for reverse proxy subpath hosting (e.g. "/taskflow")
+// Set via BASE_PATH env var or X-Forwarded-Prefix header
+const BASE_PATH = (process.env.BASE_PATH || "").replace(/\/+$/, "");
+
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Inject <base> tag into index.html so the frontend resolves assets and API calls correctly
+function serveIndex(req: express.Request, res: express.Response) {
+  const prefix = req.headers["x-forwarded-prefix"] as string || BASE_PATH || "";
+  const basePath = prefix.replace(/\/+$/, "") + "/";
+  const indexPath = path.join(__dirname, "..", "public", "index.html");
+
+  if (basePath === "/") {
+    return res.sendFile(indexPath);
+  }
+
+  // Read and inject <base href> tag
+  const fs = require("fs");
+  let html = fs.readFileSync(indexPath, "utf-8");
+  html = html.replace("<head>", `<head>\n  <base href="${basePath}">`);
+  res.type("html").send(html);
+}
 
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, "..", "public")));
@@ -26,7 +47,7 @@ app.use("/api/smart-list", smartListRoutes);
 // SPA fallback - serve index.html for non-API routes
 app.get("*", (req, res) => {
   if (!req.path.startsWith("/api")) {
-    res.sendFile(path.join(__dirname, "..", "public", "index.html"));
+    serveIndex(req, res);
   }
 });
 

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TaskFlow - Smart Task Manager</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="app">
@@ -49,6 +49,7 @@
             <div id="hamburger-dropdown" class="hamburger-dropdown hidden" role="menu">
               <button class="hamburger-item" onclick="showListModal(); closeHamburgerMenu()" role="menuitem">New List</button>
               <button class="hamburger-item" onclick="showTaskModal(); closeHamburgerMenu()" role="menuitem">New Task</button>
+              <button class="hamburger-item" onclick="showQuickTaskModal(); closeHamburgerMenu()" role="menuitem">New Quick Task</button>
               <div class="hamburger-divider"></div>
               <button class="hamburger-item hamburger-item-danger" onclick="handleLogout()" role="menuitem">Logout</button>
             </div>
@@ -158,6 +159,11 @@
     <!-- Task Modal -->
     <div id="task-modal" class="modal hidden">
       <div class="modal-content">
+        <button class="modal-close" onclick="closeTaskModal()" aria-label="Close">&times;</button>
+        <div class="modal-branding">
+          <span class="modal-branding-icon">📋</span>
+          <span class="modal-branding-text">TaskFlow</span>
+        </div>
         <h2 id="task-modal-title">New Task</h2>
         <input type="hidden" id="task-edit-id">
         <div class="form-group">
@@ -222,6 +228,11 @@
     <!-- List Modal (Create / Edit) -->
     <div id="list-modal" class="modal hidden">
       <div class="modal-content">
+        <button class="modal-close" onclick="closeListModal()" aria-label="Close">&times;</button>
+        <div class="modal-branding">
+          <span class="modal-branding-icon">📋</span>
+          <span class="modal-branding-text">TaskFlow</span>
+        </div>
         <h2 id="list-modal-title">New List</h2>
         <input type="hidden" id="list-edit-id">
         <div class="form-group">
@@ -236,6 +247,13 @@
           <label>Select Tasks to Include</label>
           <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
             <input type="text" id="list-task-search" placeholder="Search tasks..." oninput="filterListTasks()" style="flex: 1;">
+            <select id="list-task-sort" onchange="filterListTasks()" style="width: auto;">
+              <option value="alpha">A → Z</option>
+              <option value="priority-desc">Priority: High → Low</option>
+              <option value="priority-asc">Priority: Low → High</option>
+              <option value="date-added">Date Added</option>
+              <option value="due-date">Due Date</option>
+            </select>
             <button type="button" class="btn-primary btn-small" onclick="showInlineTaskForm()">+ New Task</button>
           </div>
           <div id="inline-task-form" class="hidden" style="border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem; margin-bottom: 0.5rem; background: var(--bg);">
@@ -290,8 +308,36 @@
         </div>
       </div>
     </div>
+
+    <!-- Quick Task Modal -->
+    <div id="quick-task-modal" class="modal hidden">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeQuickTaskModal()" aria-label="Close">&times;</button>
+        <div class="modal-branding">
+          <span class="modal-branding-icon">⚡</span>
+          <span class="modal-branding-text">Quick Task</span>
+        </div>
+        <h2>New Quick Task</h2>
+        <div class="form-group">
+          <label for="quick-task-title">Title *</label>
+          <input type="text" id="quick-task-title" placeholder="Task title">
+        </div>
+        <div class="form-group">
+          <label for="quick-task-priority">Priority</label>
+          <select id="quick-task-priority">
+            <option value="HIGH">High</option>
+            <option value="MEDIUM" selected>Medium</option>
+            <option value="LOW">Low</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button onclick="closeQuickTaskModal()" class="btn-secondary">Cancel</button>
+          <button onclick="saveQuickTask()" class="btn-primary">Create</button>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <script src="/app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

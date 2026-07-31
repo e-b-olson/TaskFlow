@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, request, make_response
 from flask_cors import CORS
 
 from .database import init_db, get_pool
@@ -27,12 +27,28 @@ def create_app():
     app.register_blueprint(lists_bp, url_prefix="/api/lists")
     app.register_blueprint(smart_list_bp, url_prefix="/api/smart-list")
 
+    def _serve_index():
+        """Serve index.html with <base> tag injected for subpath hosting."""
+        prefix = request.headers.get("X-Forwarded-Prefix", os.environ.get("BASE_PATH", ""))
+        base_path = prefix.rstrip("/") + "/"
+        index_path = os.path.join(static_dir, "index.html")
+
+        if base_path == "/":
+            return send_from_directory(static_dir, "index.html")
+
+        with open(index_path, "r") as f:
+            html = f.read()
+        html = html.replace("<head>", f'<head>\n  <base href="{base_path}">', 1)
+        resp = make_response(html)
+        resp.headers["Content-Type"] = "text/html; charset=utf-8"
+        return resp
+
     # SPA fallback - serve index.html for non-API routes
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")
     def serve_frontend(path):
         if path and os.path.exists(os.path.join(static_dir, path)):
             return send_from_directory(static_dir, path)
-        return send_from_directory(static_dir, "index.html")
+        return _serve_index()
 
     return app

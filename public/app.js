@@ -1,3 +1,6 @@
+// Derive base path from the served page location
+const BASE_PATH = document.querySelector('base') ? new URL(document.querySelector('base').href).pathname.replace(/\/$/, '') : '';
+
 // State
 let token = localStorage.getItem("token");
 let username = localStorage.getItem("username");
@@ -8,7 +11,7 @@ async function api(path, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`/api${path}`, { ...options, headers });
+  const res = await fetch(`${BASE_PATH}/api${path}`, { ...options, headers });
 
   if (res.status === 401) {
     handleLogout();
@@ -145,7 +148,13 @@ function switchTab(tab) {
   event.target.classList.add("active");
   document.getElementById(`${tab}-tab`).classList.remove("hidden");
 
-  if (tab === "tasks") loadTasks();
+  if (tab === "tasks") {
+    // Reset task detail view if open
+    document.querySelector("#tasks-tab .toolbar").classList.remove("hidden");
+    document.getElementById("tasks-list").classList.remove("hidden");
+    document.getElementById("task-detail").classList.add("hidden");
+    loadTasks();
+  }
   if (tab === "lists") loadLists();
 }
 
@@ -252,6 +261,7 @@ function closeTaskDetail() {
 // Task Modal
 function showTaskModal(taskData = null) {
   document.getElementById("task-modal").classList.remove("hidden");
+  document.querySelector("#task-modal .modal-content").scrollTop = 0;
   document.getElementById("task-modal-title").textContent = taskData ? "Edit Task" : "New Task";
   document.getElementById("task-edit-id").value = taskData ? taskData.id : "";
   document.getElementById("task-title").value = taskData ? taskData.title : "";
@@ -458,10 +468,11 @@ function closeListDetail() {
   loadLists();
 }
 
-// Fetch all user tasks for the selector
+// Fetch all user tasks for the selector (exclude completed)
 async function fetchAllTasks() {
   try {
-    allTasksCache = await api("/tasks?sort_by=title&sort_order=asc");
+    const all = await api("/tasks?sort_by=title&sort_order=asc");
+    allTasksCache = all.filter((t) => t.status !== "COMPLETE");
   } catch (err) {
     allTasksCache = [];
   }
@@ -471,11 +482,37 @@ async function fetchAllTasks() {
 function renderTaskSelector(selectedTaskIds = []) {
   const container = document.getElementById("list-task-selector");
   const searchVal = (document.getElementById("list-task-search").value || "").toLowerCase();
+  const sortVal = document.getElementById("list-task-sort").value;
 
-  const filtered = allTasksCache.filter((t) =>
+  let filtered = allTasksCache.filter((t) =>
     t.title.toLowerCase().includes(searchVal) ||
     (t.description || "").toLowerCase().includes(searchVal)
   );
+
+  const priorityOrder = { HIGH: 1, MEDIUM: 2, LOW: 3 };
+
+  switch (sortVal) {
+    case "alpha":
+      filtered.sort((a, b) => a.title.localeCompare(b.title));
+      break;
+    case "priority-desc":
+      filtered.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+      break;
+    case "priority-asc":
+      filtered.sort((a, b) => priorityOrder[b.priority] - priorityOrder[a.priority]);
+      break;
+    case "date-added":
+      filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      break;
+    case "due-date":
+      filtered.sort((a, b) => {
+        if (!a.deadline && !b.deadline) return 0;
+        if (!a.deadline) return 1;
+        if (!b.deadline) return -1;
+        return new Date(a.deadline) - new Date(b.deadline);
+      });
+      break;
+  }
 
   if (filtered.length === 0) {
     container.innerHTML = '<div class="task-selector-empty">No tasks found</div>';
@@ -489,8 +526,7 @@ function renderTaskSelector(selectedTaskIds = []) {
       <input type="checkbox" id="sel-task-${task.id}" value="${task.id}" ${selectedSet.has(task.id) ? "checked" : ""}>
       <label for="sel-task-${task.id}">
         <span>${escapeHtml(task.title)}</span>
-        <span class="badge badge-priority-${task.priority}">${task.priority}</span>
-        <span class="badge badge-status-${task.status}">${formatStatus(task.status)}</span>
+        <span class="badge badge-priority-${task.priority}" style="margin-left: auto;">${task.priority}</span>
       </label>
     </div>
   `).join("");
@@ -521,6 +557,7 @@ async function showListModal() {
   renderTaskSelector([]);
 
   document.getElementById("list-modal").classList.remove("hidden");
+  document.querySelector("#list-modal .modal-content").scrollTop = 0;
 }
 
 // Show list modal for editing an existing list
@@ -774,6 +811,40 @@ async function generateSmartList() {
       `).join("")}
       ${result.list ? `<p style="margin-top: 1rem; color: var(--success);">✓ List "${escapeHtml(result.list.name)}" has been created. Check your Lists tab!</p>` : ""}
     `;
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+// Quick Task
+function showQuickTaskModal() {
+  document.getElementById("quick-task-modal").classList.remove("hidden");
+  document.getElementById("quick-task-title").value = "";
+  document.getElementById("quick-task-priority").value = "MEDIUM";
+  document.querySelector("#quick-task-modal .modal-content").scrollTop = 0;
+  document.getElementById("quick-task-title").focus();
+}
+
+function closeQuickTaskModal() {
+  document.getElementById("quick-task-modal").classList.add("hidden");
+}
+
+async function saveQuickTask() {
+  const title = document.getElementById("quick-task-title").value.trim();
+  const priority = document.getElementById("quick-task-priority").value;
+
+  if (!title) {
+    alert("Title is required");
+    return;
+  }
+
+  try {
+    await api("/tasks", {
+      method: "POST",
+      body: JSON.stringify({ title, priority }),
+    });
+    closeQuickTaskModal();
+    loadTasks();
   } catch (err) {
     alert(err.message);
   }
