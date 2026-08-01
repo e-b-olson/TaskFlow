@@ -7,4 +7,4 @@ RUN pip install --no-cache-dir -r requirements.txt -r requirements-test.txt
 
 COPY . .
 
-CMD ["pytest", "-v"]
+CMD ["sh", "-c", "python wait_for_db.py && pytest -v"]

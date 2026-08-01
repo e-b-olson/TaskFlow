@@ -623,6 +623,14 @@ header h1 {
   gap: 0.75rem;
 }
 
+.list-task-item .task-info .badge-priority-HIGH,
+.list-task-item .task-info .badge-priority-MEDIUM,
+.list-task-item .task-info .badge-priority-LOW {
+  width: 4.5rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 .available-list-item {
   display: flex;
   align-items: center;
@@ -686,4 +694,178 @@ header h1 {
   .tabs { overflow-x: auto; }
   header { padding: 1rem; }
   .tab-content { padding: 1rem; }
+}
+
+/* Home / Landing Page */
+.home-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.home-section {
+  margin-bottom: 2rem;
+}
+
+.home-section-title {
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+
+.home-top-task .home-section-title {
+  color: var(--primary);
+  font-style: italic;
+}
+
+.home-task-card .home-task-main {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.25rem 0;
+}
+
+.home-task-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-task-effort {
+  flex-shrink: 0;
+}
+
+.home-task-time {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.home-task-action {
+  flex-shrink: 0;
+}
+
+.home-task-card.task-card {
+  padding: 0.75rem 1.25rem;
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+/* Activity Grid (GitHub-style) */
+.activity-grid-wrapper {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+  overflow-x: auto;
+}
+
+.activity-months {
+  position: relative;
+  height: 1.2rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.activity-month-label {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+}
+
+.activity-grid {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.activity-day-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-right: 0.5rem;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.activity-day-labels .activity-day-label {
+  width: 2rem;
+  height: 12px;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+}
+
+.activity-weeks-container {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-weeks {
+  display: flex;
+  gap: 2px;
+}
+
+.activity-week {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.activity-cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.activity-empty {
+  background: transparent;
+}
+
+.activity-level-0 {
+  background: #e2e8f0;
+}
+
+.activity-level-1 {
+  background: #ede9fe;
+}
+
+.activity-level-2 {
+  background: #c4b5fd;
+}
+
+.activity-level-3 {
+  background: #8b5cf6;
+}
+
+.activity-level-4 {
+  background: #6d28d9;
+}
+
+.activity-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 0.75rem;
+  justify-content: flex-end;
+  font-size: 0.75rem;
+}
+
+.activity-legend .activity-cell {
+  width: 10px;
+  height: 10px;
+}
+
+@media (max-width: 768px) {
+  .activity-grid-wrapper {
+    padding: 1rem;
+  }
+  .home-container {
+    padding: 0;
+  }
 }

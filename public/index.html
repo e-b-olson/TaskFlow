@@ -58,17 +58,51 @@
       </header>
 
       <nav class="tabs">
-        <button class="tab active" onclick="switchTab('lists')">My Lists</button>
+        <button class="tab active" onclick="switchTab('home')">Home</button>
+        <button class="tab" onclick="switchTab('lists')">My Lists</button>
         <button class="tab" onclick="switchTab('tasks')">All Tasks</button>
         <button class="tab" onclick="switchTab('smart')">Smart Builder</button>
       </nav>
 
+      <!-- Home Tab -->
+      <div id="home-tab" class="tab-content">
+        <div class="home-container">
+          <!-- Top Task Section -->
+          <section class="home-section home-top-task">
+            <h2 class="home-section-title">If you only do one thing today...</h2>
+            <div id="home-top-task-content">
+              <p class="text-muted">Loading...</p>
+            </div>
+          </section>
+
+          <!-- Recent List Section -->
+          <section class="home-section home-recent-list">
+            <h2 class="home-section-title">Pick up where you left off</h2>
+            <div id="home-recent-list-content">
+              <p class="text-muted">Loading...</p>
+            </div>
+          </section>
+
+          <!-- Activity Grid Section -->
+          <section class="home-section home-activity">
+            <h2 class="home-section-title">Your Activity</h2>
+            <div id="home-activity-content">
+              <p class="text-muted">Loading...</p>
+            </div>
+          </section>
+        </div>
+      </div>
+
       <!-- Lists Tab -->
-      <div id="lists-tab" class="tab-content">
+      <div id="lists-tab" class="tab-content hidden">
         <div id="lists-container"></div>
         <div id="list-detail" class="hidden">
           <button onclick="closeListDetail()" class="btn-secondary">&larr; Back to Lists</button>
           <div id="list-detail-content"></div>
+        </div>
+        <div id="list-task-detail" class="hidden">
+          <button onclick="closeListTaskDetail()" class="btn-secondary">&larr; Back to List</button>
+          <div id="list-task-detail-content"></div>
         </div>
       </div>
 

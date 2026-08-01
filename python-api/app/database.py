@@ -16,11 +16,17 @@ def get_pool():
 
 
 def init_db():
-    """Create tables if they don't exist."""
+    """Create tables if they don't exist.
+
+    Uses a PostgreSQL advisory lock to prevent race conditions when
+    multiple workers (e.g. gunicorn) call this concurrently.
+    """
     p = get_pool()
     conn = p.getconn()
     try:
         with conn.cursor() as cur:
+            # Acquire an advisory lock (id=1) to serialize migrations
+            cur.execute("SELECT pg_advisory_lock(1)")
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id SERIAL PRIMARY KEY,
@@ -72,6 +78,8 @@ def init_db():
                 CREATE INDEX IF NOT EXISTS idx_task_list_items_list ON task_list_items(task_list_id);
                 CREATE INDEX IF NOT EXISTS idx_task_list_items_task ON task_list_items(task_id);
             """)
+            # Release the advisory lock
+            cur.execute("SELECT pg_advisory_unlock(1)")
         conn.commit()
     finally:
         p.putconn(conn)

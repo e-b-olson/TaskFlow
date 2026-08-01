@@ -140,7 +140,7 @@ function showApp() {
   document.getElementById("auth-section").classList.add("hidden");
   document.getElementById("main-section").classList.remove("hidden");
   document.getElementById("user-greeting").textContent = `Hi, ${username}`;
-  loadLists();
+  loadHome();
 }
 
 // Tabs
@@ -151,6 +151,7 @@ function switchTab(tab) {
   event.target.classList.add("active");
   document.getElementById(`${tab}-tab`).classList.remove("hidden");
 
+  if (tab === "home") loadHome();
   if (tab === "tasks") {
     // Reset task detail view if open
     document.querySelector("#tasks-tab .toolbar").classList.remove("hidden");
@@ -159,6 +160,228 @@ function switchTab(tab) {
     loadTasks();
   }
   if (tab === "lists") loadLists();
+}
+
+// Home / Landing Page
+async function loadHome() {
+  loadTopTask();
+  loadRecentList();
+  loadActivityGrid();
+}
+
+async function loadTopTask() {
+  const container = document.getElementById("home-top-task-content");
+  try {
+    const task = await api("/dashboard/top-task");
+    if (!task) {
+      container.innerHTML = '<p class="text-muted">No pending tasks. You\'re all caught up!</p>';
+      return;
+    }
+    const startBtn = task.status === "PENDING"
+      ? `<button class="btn-primary btn-small" onclick="event.stopPropagation(); startHomeTask(${task.id})">Start</button>`
+      : task.status === "IN_PROGRESS"
+        ? `<span class="badge badge-status-IN_PROGRESS">In Progress</span>`
+        : "";
+
+    container.innerHTML = `
+      <div class="task-card priority-${task.priority} home-task-card" onclick="viewTask(${task.id}); switchToTab('tasks')" style="cursor: pointer;">
+        <div class="home-task-main">
+          <span class="badge badge-priority-${task.priority}">${task.priority}</span>
+          <span class="home-task-title">${escapeHtml(task.title)}</span>
+          <span class="badge badge-effort home-task-effort">${task.effort} effort</span>
+          ${task.time_estimate_minutes ? `<span class="home-task-time">⏱ ${task.time_estimate_minutes} min</span>` : ""}
+          <div class="home-task-action">
+            ${startBtn}
+          </div>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = '<p class="text-muted">Could not load top task.</p>';
+  }
+}
+
+async function startHomeTask(taskId) {
+  try {
+    await api(`/tasks/${taskId}`, {
+      method: "PUT",
+      body: JSON.stringify({ status: "IN_PROGRESS" }),
+    });
+    loadTopTask();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function loadRecentList() {
+  const container = document.getElementById("home-recent-list-content");
+  try {
+    const list = await api("/dashboard/recent-list");
+    if (!list) {
+      container.innerHTML = '<p class="text-muted">No lists yet. Create one to get started!</p>';
+      return;
+    }
+    container.innerHTML = `
+      <div class="list-card" onclick="navigateToList(${list.id})" style="cursor: pointer;">
+        <h3>${escapeHtml(list.name)}</h3>
+        ${list.description ? `<p class="list-meta">${escapeHtml(list.description)}</p>` : ""}
+        <p class="list-meta">Last activity ${formatDate(list.last_activity)}</p>
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = '<p class="text-muted">Could not load recent list.</p>';
+  }
+}
+
+function navigateToList(listId) {
+  // Switch to lists tab and open the list
+  switchToTab("lists");
+  viewList(listId);
+}
+
+function switchToTab(tab) {
+  document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+  document.querySelectorAll(".tab-content").forEach((t) => t.classList.add("hidden"));
+
+  // Find the matching tab button
+  const tabs = document.querySelectorAll(".tab");
+  tabs.forEach((t) => {
+    if (t.textContent.toLowerCase().includes(tab === "home" ? "home" : tab === "lists" ? "list" : tab === "tasks" ? "task" : "smart")) {
+      t.classList.add("active");
+    }
+  });
+
+  document.getElementById(`${tab}-tab`).classList.remove("hidden");
+}
+
+async function loadActivityGrid() {
+  const container = document.getElementById("home-activity-content");
+  try {
+    const activity = await api("/dashboard/activity");
+    renderActivityGrid(container, activity);
+  } catch (err) {
+    container.innerHTML = '<p class="text-muted">Could not load activity data.</p>';
+  }
+}
+
+function renderActivityGrid(container, activity) {
+  const today = new Date();
+  const weeks = 52;
+  const totalDays = weeks * 7;
+
+  // Find max count for color scaling
+  const counts = Object.values(activity);
+  const maxCount = counts.length > 0 ? Math.max(...counts) : 0;
+
+  // Calculate the start date (go back totalDays from today, align to Sunday)
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - totalDays + 1);
+  // Align to the previous Sunday
+  startDate.setDate(startDate.getDate() - startDate.getDay());
+
+  // Build grid data
+  const days = [];
+  const current = new Date(startDate);
+  while (current <= today) {
+    const dateStr = current.toISOString().split("T")[0];
+    const count = activity[dateStr] || 0;
+    days.push({ date: dateStr, count, dayOfWeek: current.getDay() });
+    current.setDate(current.getDate() + 1);
+  }
+
+  // Group by weeks
+  const weekColumns = [];
+  let currentWeek = [];
+  for (const day of days) {
+    if (day.dayOfWeek === 0 && currentWeek.length > 0) {
+      weekColumns.push(currentWeek);
+      currentWeek = [];
+    }
+    currentWeek.push(day);
+  }
+  if (currentWeek.length > 0) weekColumns.push(currentWeek);
+
+  // Month labels
+  const monthLabels = [];
+  let lastMonth = -1;
+  for (let i = 0; i < weekColumns.length; i++) {
+    const firstDayOfWeek = new Date(weekColumns[i][0].date);
+    const month = firstDayOfWeek.getMonth();
+    if (month !== lastMonth) {
+      monthLabels.push({ index: i, label: firstDayOfWeek.toLocaleDateString(undefined, { month: "short" }) });
+      lastMonth = month;
+    }
+  }
+
+  // Day labels
+  const dayLabels = ["", "Mon", "", "Wed", "", "Fri", ""];
+
+  // Render
+  let html = '<div class="activity-grid-wrapper">';
+
+  // Grid with month labels positioned above week columns
+  html += '<div class="activity-grid">';
+
+  // Day labels
+  html += '<div class="activity-day-labels">';
+  for (const label of dayLabels) {
+    html += `<div class="activity-day-label">${label}</div>`;
+  }
+  html += '</div>';
+
+  // Weeks area with month labels
+  const gridWidth = weekColumns.length * 14; // 12px cell + 2px gap per column
+  html += `<div class="activity-weeks-container" style="min-width: ${gridWidth}px;">`;
+
+  // Month labels row (each positioned at its week column offset)
+  html += `<div class="activity-months" style="width: ${gridWidth}px;">`;
+  for (const ml of monthLabels) {
+    html += `<span class="activity-month-label" style="left: ${ml.index * 14}px;">${ml.label}</span>`;
+  }
+  html += '</div>';
+
+  // Week columns
+  html += '<div class="activity-weeks">';
+  for (const week of weekColumns) {
+    html += '<div class="activity-week">';
+    // Pad with empty cells if week doesn't start on Sunday
+    for (let i = 0; i < week[0].dayOfWeek; i++) {
+      html += '<div class="activity-cell activity-empty"></div>';
+    }
+    for (const day of week) {
+      const level = getActivityLevel(day.count, maxCount);
+      const title = `${day.date}: ${day.count} task${day.count !== 1 ? "s" : ""} completed`;
+      html += `<div class="activity-cell activity-level-${level}" title="${title}"></div>`;
+    }
+    html += '</div>';
+  }
+  html += '</div>'; // activity-weeks
+
+  html += '</div>'; // activity-weeks-container
+  html += '</div>'; // activity-grid
+
+  // Legend
+  html += '<div class="activity-legend">';
+  html += '<span class="text-muted">Less</span>';
+  for (let i = 0; i <= 4; i++) {
+    html += `<div class="activity-cell activity-level-${i}"></div>`;
+  }
+  html += '<span class="text-muted">More</span>';
+  html += '</div>';
+
+  html += '</div>'; // activity-grid-wrapper
+
+  container.innerHTML = html;
+}
+
+function getActivityLevel(count, maxCount) {
+  if (count === 0) return 0;
+  if (maxCount === 0) return 0;
+  const ratio = count / maxCount;
+  if (ratio <= 0.25) return 1;
+  if (ratio <= 0.5) return 2;
+  if (ratio <= 0.75) return 3;
+  return 4;
 }
 
 // Tasks
@@ -311,7 +534,10 @@ async function saveTask() {
 
     // If task detail is visible, refresh it; otherwise reload the task list
     const taskDetail = document.getElementById("task-detail");
-    if (id && taskDetail && !taskDetail.classList.contains("hidden")) {
+    const listTaskDetail = document.getElementById("list-task-detail");
+    if (id && listTaskDetail && !listTaskDetail.classList.contains("hidden")) {
+      viewTaskFromList(id, currentListId);
+    } else if (id && taskDetail && !taskDetail.classList.contains("hidden")) {
       viewTask(id);
     } else {
       loadTasks();
@@ -389,6 +615,24 @@ async function viewList(id) {
     document.getElementById("lists-container").classList.add("hidden");
     document.getElementById("list-detail").classList.remove("hidden");
 
+    // Sort tasks: non-complete first (by priority), then complete (by completed_at or created_at)
+    const priorityOrder = { HIGH: 1, MEDIUM: 2, LOW: 3 };
+    const sortedTasks = [...list.tasks].sort((a, b) => {
+      const aComplete = a.status === "COMPLETE" ? 1 : 0;
+      const bComplete = b.status === "COMPLETE" ? 1 : 0;
+      if (aComplete !== bComplete) return aComplete - bComplete;
+
+      if (aComplete) {
+        // Both complete: sort by completed_at (or created_at as fallback)
+        const aDate = a.completed_at || a.created_at || "";
+        const bDate = b.completed_at || b.created_at || "";
+        return aDate.localeCompare(bDate);
+      }
+
+      // Both not complete: sort by priority
+      return (priorityOrder[a.priority] || 99) - (priorityOrder[b.priority] || 99);
+    });
+
     const content = document.getElementById("list-detail-content");
     content.innerHTML = `
       <div class="list-detail-header">
@@ -396,14 +640,13 @@ async function viewList(id) {
         <button class="btn-icon" onclick="editListModal(${list.id})" aria-label="Edit list" title="Edit list"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 1.5l3 3L5 14H2v-3L11.5 1.5z"/></svg></button>
       </div>
       ${list.description ? `<p class="list-description">${escapeHtml(list.description)}</p>` : ""}
-      ${list.tasks.length === 0
+      ${sortedTasks.length === 0
         ? '<p style="color: var(--text-muted);">No tasks in this list yet. Click "Edit List" to add tasks.</p>'
-        : list.tasks.map((task) => `
+        : sortedTasks.map((task) => `
           <div class="list-task-item">
-            <div class="task-info">
-              <span class="badge badge-status-${task.status}">${formatStatus(task.status)}</span>
-              <span>${escapeHtml(task.title)}</span>
+            <div class="task-info" onclick="viewTaskFromList(${task.id}, ${list.id})" style="cursor: pointer; flex: 1;">
               <span class="badge badge-priority-${task.priority}">${task.priority}</span>
+              <span>${escapeHtml(task.title)}</span>
               ${task.time_estimate_minutes ? `<span style="color: var(--text-muted); font-size: 0.8rem;">⏱ ${task.time_estimate_minutes}min</span>` : ""}
             </div>
             ${taskActionButtons(task, list.id)}
@@ -417,18 +660,18 @@ async function viewList(id) {
 
 function taskActionButtons(task, listId) {
   if (task.status === "PENDING") {
-    return `<button class="btn-primary btn-small" onclick="startTask(${task.id}, ${listId})">Start</button>`;
+    return `<button class="btn-primary btn-small" onclick="event.stopPropagation(); startTask(${task.id}, ${listId})">Start</button>`;
   }
   if (task.status === "IN_PROGRESS") {
     return `
       <div style="display: flex; gap: 0.4rem;">
-        <button class="btn-secondary btn-small" onclick="stopTask(${task.id}, ${listId})">Stop</button>
-        <button class="btn-primary btn-small" onclick="completeTask(${task.id}, ${listId})">Complete</button>
+        <button class="btn-secondary btn-small" onclick="event.stopPropagation(); stopTask(${task.id}, ${listId})">Resume</button>
+        <button class="btn-primary btn-small" onclick="event.stopPropagation(); completeTask(${task.id}, ${listId})">Complete</button>
       </div>
     `;
   }
-  // COMPLETE — no action buttons
-  return "";
+  // COMPLETE — show status badge on the right
+  return `<span class="badge badge-status-COMPLETE">${formatStatus(task.status)}</span>`;
 }
 
 async function startTask(taskId, listId) {
@@ -469,6 +712,52 @@ async function completeTask(taskId, listId) {
 
 function closeListDetail() {
   loadLists();
+}
+
+// View task detail from within a list
+let currentListId = null;
+
+async function viewTaskFromList(taskId, listId) {
+  try {
+    const task = await api(`/tasks/${taskId}`);
+    currentListId = listId;
+
+    document.getElementById("list-detail").classList.add("hidden");
+    document.getElementById("list-task-detail").classList.remove("hidden");
+
+    const content = document.getElementById("list-task-detail-content");
+    content.innerHTML = `
+      <div class="task-detail-card priority-${task.priority}">
+        <h2>${escapeHtml(task.title)}</h2>
+        ${task.description ? `<p class="task-detail-description">${escapeHtml(task.description)}</p>` : ""}
+        <div class="task-meta" style="margin: 1rem 0;">
+          <span class="badge badge-status-${task.status}">${formatStatus(task.status)}</span>
+          <span class="badge badge-priority-${task.priority}">${task.priority}</span>
+          <span class="badge badge-effort">${task.effort} effort</span>
+        </div>
+        <div class="task-detail-info">
+          ${task.time_estimate_minutes ? `<div>⏱ <strong>Time Estimate:</strong> ${task.time_estimate_minutes} min</div>` : ""}
+          ${task.deadline ? `<div>📅 <strong>Deadline:</strong> ${formatDate(task.deadline)}</div>` : ""}
+          ${task.cost ? `<div>💰 <strong>Cost:</strong> $${task.cost}</div>` : ""}
+          ${task.materials ? `<div>🛠 <strong>Materials:</strong> ${escapeHtml(task.materials)}</div>` : ""}
+        </div>
+        <div class="task-detail-actions">
+          <button class="btn-primary" onclick="editTask(${task.id})">Edit</button>
+          <button class="btn-secondary" onclick="showAddToList(${task.id})">Add to List</button>
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+function closeListTaskDetail() {
+  document.getElementById("list-task-detail").classList.add("hidden");
+  document.getElementById("list-detail").classList.remove("hidden");
+  if (currentListId) {
+    viewList(currentListId);
+  }
 }
 
 // Fetch all user tasks for the selector (exclude completed)

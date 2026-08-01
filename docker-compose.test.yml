@@ -19,23 +19,35 @@ services:
     build: ./python-api
     ports:
       - "5002:5000"
-    volumes:
-      - ./public:/app/public
     environment:
       - FLASK_ENV=testing
       - JWT_SECRET=test-secret
       - DATABASE_URL=postgresql://todo_test_user:todo_test_pass@test-db:5432/todo_test_db
-      - STATIC_DIR=/app/public
     networks:
       - test-net
     depends_on:
       test-db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:5000/\")'"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:5000/health\")'"]
       interval: 5s
       timeout: 5s
       retries: 10
+
+  test-frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "3001:80"
+    environment:
+      - BASE_PATH=
+      - API_HOST=test-api
+    networks:
+      - test-net
+    depends_on:
+      test-api:
+        condition: service_healthy
 
   # API unit tests (pytest)
   api-tests:
@@ -56,12 +68,12 @@ services:
   e2e-tests:
     build: ./e2e
     environment:
-      - BASE_URL=http://test-api:5000
+      - BASE_URL=http://test-frontend:80
     networks:
       - test-net
     depends_on:
-      test-api:
-        condition: service_healthy
+      test-frontend:
+        condition: service_started
     profiles:
       - e2e-tests
 
