@@ -6,7 +6,7 @@ services:
     ports:
       - "3000:80"
     environment:
-      - BASE_PATH=
+      - BASE_PATH=${BASE_PATH:-}
       - API_HOST=api
     depends_on:
       - api
