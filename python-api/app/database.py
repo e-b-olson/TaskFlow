@@ -1,18 +1,49 @@
 import os
+import threading
+
+import psycopg2
 from psycopg2 import pool as pg_pool
 
 _pool = None
+_pool_pid = None
+_pool_lock = threading.Lock()
+
+
+def _get_database_url():
+    return os.environ.get(
+        "DATABASE_URL",
+        "postgresql://todo_user:todo_pass@localhost:5432/todo_db",
+    )
 
 
 def get_pool():
-    global _pool
-    if _pool is None:
-        database_url = os.environ.get(
-            "DATABASE_URL",
-            "postgresql://todo_user:todo_pass@localhost:5432/todo_db",
-        )
-        _pool = pg_pool.ThreadedConnectionPool(1, 10, database_url)
-    return _pool
+    """Return a per-process connection pool.
+
+    psycopg2 connections are not fork-safe. If the pool was created in a
+    parent process (e.g. gunicorn master with --preload), discard it and
+    create a fresh one in the current worker process.
+    """
+    global _pool, _pool_pid
+    pid = os.getpid()
+
+    if _pool is not None and _pool_pid == pid:
+        return _pool
+
+    with _pool_lock:
+        # Double-check after acquiring lock
+        if _pool is not None and _pool_pid == pid:
+            return _pool
+
+        # Close stale pool inherited from a parent process
+        if _pool is not None:
+            try:
+                _pool.closeall()
+            except Exception:
+                pass
+
+        _pool = pg_pool.ThreadedConnectionPool(1, 10, _get_database_url())
+        _pool_pid = pid
+        return _pool
 
 
 def init_db():
@@ -20,9 +51,12 @@ def init_db():
 
     Uses a PostgreSQL advisory lock to prevent race conditions when
     multiple workers (e.g. gunicorn) call this concurrently.
+
+    Opens a dedicated connection for migration rather than using the pool,
+    so the pool remains clean for post-fork workers.
     """
-    p = get_pool()
-    conn = p.getconn()
+    database_url = _get_database_url()
+    conn = psycopg2.connect(database_url)
     try:
         with conn.cursor() as cur:
             # Acquire an advisory lock (id=1) to serialize migrations
@@ -82,4 +116,4 @@ def init_db():
             cur.execute("SELECT pg_advisory_unlock(1)")
         conn.commit()
     finally:
-        p.putconn(conn)
+        conn.close()
