@@ -122,11 +122,33 @@ test.describe("Lists", () => {
 
     // Start the task
     await page.click('button:has-text("Start")');
-    await expect(page.locator("#list-detail-content")).toContainText("IN PROGRESS");
+    await expect(page.locator('#list-detail-content button:has-text("Stop")')).toBeVisible();
+    await expect(page.locator('#list-detail-content button:has-text("Complete")')).toBeVisible();
 
     // Complete the task
     await page.click('button:has-text("Complete")');
     await expect(page.locator("#list-detail-content")).toContainText("COMPLETE");
+  });
+
+  test("can stop an in-progress task within a list", async ({ page }) => {
+    // Create task and list
+    await createTask(page, "Stoppable task");
+
+    await page.click(".hamburger-btn");
+    await page.click('button[role="menuitem"]:has-text("New List")');
+    await page.fill("#list-name", "Stop Test List");
+    await page.check('#list-task-selector input[type="checkbox"]');
+    await page.click('#list-modal button:has-text("Create")');
+
+    // View list and start the task
+    await page.click('.list-card:has-text("Stop Test List")');
+    await page.click('button:has-text("Start")');
+    await expect(page.locator('#list-detail-content button:has-text("Stop")')).toBeVisible();
+    await expect(page.locator('#list-detail-content button:has-text("Complete")')).toBeVisible();
+
+    // Stop the task — should return to showing Start button
+    await page.click('button:has-text("Stop")');
+    await expect(page.locator('#list-detail-content button:has-text("Start")')).toBeVisible();
   });
 
   test("back button returns to lists view", async ({ page }) => {

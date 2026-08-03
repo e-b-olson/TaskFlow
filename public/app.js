@@ -673,7 +673,7 @@ function taskActionButtons(task, listId) {
   if (task.status === "IN_PROGRESS") {
     return `
       <div style="display: flex; gap: 0.4rem;">
-        <button class="btn-secondary btn-small" onclick="event.stopPropagation(); stopTask(${task.id}, ${listId})">Resume</button>
+        <button class="btn-secondary btn-small" onclick="event.stopPropagation(); stopTask(${task.id}, ${listId})">Stop</button>
         <button class="btn-primary btn-small" onclick="event.stopPropagation(); completeTask(${task.id}, ${listId})">Complete</button>
       </div>
     `;
