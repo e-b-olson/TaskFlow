@@ -623,7 +623,7 @@ async function viewList(id) {
     document.getElementById("lists-container").classList.add("hidden");
     document.getElementById("list-detail").classList.remove("hidden");
 
-    // Sort tasks: non-complete first (by priority), then complete (by completed_at or created_at)
+    // Sort tasks: non-complete first (by priority, then position), then complete
     const priorityOrder = { HIGH: 1, MEDIUM: 2, LOW: 3 };
     const sortedTasks = [...list.tasks].sort((a, b) => {
       const aComplete = a.status === "COMPLETE" ? 1 : 0;
@@ -637,8 +637,10 @@ async function viewList(id) {
         return aDate.localeCompare(bDate);
       }
 
-      // Both not complete: sort by priority
-      return (priorityOrder[a.priority] || 99) - (priorityOrder[b.priority] || 99);
+      // Both not complete: sort by priority first, then by position
+      const priDiff = (priorityOrder[a.priority] || 99) - (priorityOrder[b.priority] || 99);
+      if (priDiff !== 0) return priDiff;
+      return (a.position ?? 999) - (b.position ?? 999);
     });
 
     const content = document.getElementById("list-detail-content");
@@ -650,8 +652,9 @@ async function viewList(id) {
       ${list.description ? `<p class="list-description">${escapeHtml(list.description)}</p>` : ""}
       ${sortedTasks.length === 0
         ? '<p style="color: var(--text-muted);">No tasks in this list yet. Click "Edit List" to add tasks.</p>'
-        : sortedTasks.map((task) => `
-          <div class="list-task-item">
+        : `<div id="list-tasks-sortable" data-list-id="${list.id}">${sortedTasks.map((task) => `
+          <div class="list-task-item" draggable="true" data-task-id="${task.id}">
+            <span class="drag-handle" aria-label="Drag to reorder">⠿</span>
             <div class="task-info" onclick="viewTaskFromList(${task.id}, ${list.id})" style="cursor: pointer; flex: 1;">
               <span class="badge badge-priority-${task.priority}">${task.priority}</span>
               <span>${escapeHtml(task.title)}</span>
@@ -659,10 +662,79 @@ async function viewList(id) {
             </div>
             ${taskActionButtons(task, list.id)}
           </div>
-        `).join("")}
+        `).join("")}</div>`}
     `;
+
+    // Initialize drag-and-drop if there are tasks
+    if (sortedTasks.length > 0) {
+      initListDragAndDrop(list.id);
+    }
   } catch (err) {
     alert(err.message);
+  }
+}
+
+// Drag-and-drop reordering for list tasks
+function initListDragAndDrop(listId) {
+  const container = document.getElementById("list-tasks-sortable");
+  if (!container) return;
+
+  let draggedEl = null;
+
+  container.addEventListener("dragstart", (e) => {
+    const item = e.target.closest(".list-task-item");
+    if (!item) return;
+    draggedEl = item;
+    item.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+  });
+
+  container.addEventListener("dragend", (e) => {
+    if (draggedEl) {
+      draggedEl.classList.remove("dragging");
+      draggedEl = null;
+    }
+    // Remove any drop indicators
+    container.querySelectorAll(".list-task-item").forEach((el) => el.classList.remove("drag-over"));
+    // Save new order
+    saveListOrder(listId);
+  });
+
+  container.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const target = e.target.closest(".list-task-item");
+    if (!target || target === draggedEl) return;
+
+    const rect = target.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+
+    // Remove previous indicators
+    container.querySelectorAll(".list-task-item").forEach((el) => el.classList.remove("drag-over"));
+    target.classList.add("drag-over");
+
+    if (e.clientY < midY) {
+      container.insertBefore(draggedEl, target);
+    } else {
+      container.insertBefore(draggedEl, target.nextSibling);
+    }
+  });
+}
+
+async function saveListOrder(listId) {
+  const container = document.getElementById("list-tasks-sortable");
+  if (!container) return;
+
+  const taskIds = Array.from(container.querySelectorAll(".list-task-item[data-task-id]"))
+    .map((el) => parseInt(el.dataset.taskId));
+
+  try {
+    await api(`/lists/${listId}/reorder`, {
+      method: "PUT",
+      body: JSON.stringify({ task_ids: taskIds }),
+    });
+  } catch (err) {
+    console.error("Failed to save order:", err);
   }
 }
 
