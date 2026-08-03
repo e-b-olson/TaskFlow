@@ -681,6 +681,7 @@ function initListDragAndDrop(listId) {
 
   let draggedEl = null;
 
+  // --- Desktop drag events ---
   container.addEventListener("dragstart", (e) => {
     const item = e.target.closest(".list-task-item");
     if (!item) return;
@@ -694,9 +695,7 @@ function initListDragAndDrop(listId) {
       draggedEl.classList.remove("dragging");
       draggedEl = null;
     }
-    // Remove any drop indicators
     container.querySelectorAll(".list-task-item").forEach((el) => el.classList.remove("drag-over"));
-    // Save new order
     saveListOrder(listId);
   });
 
@@ -709,7 +708,6 @@ function initListDragAndDrop(listId) {
     const rect = target.getBoundingClientRect();
     const midY = rect.top + rect.height / 2;
 
-    // Remove previous indicators
     container.querySelectorAll(".list-task-item").forEach((el) => el.classList.remove("drag-over"));
     target.classList.add("drag-over");
 
@@ -718,6 +716,91 @@ function initListDragAndDrop(listId) {
     } else {
       container.insertBefore(draggedEl, target.nextSibling);
     }
+  });
+
+  // --- Touch events for mobile ---
+  let touchStartY = 0;
+  let touchCurrentY = 0;
+  let touchStarted = false;
+  let longPressTimer = null;
+
+  container.addEventListener("touchstart", (e) => {
+    const handle = e.target.closest(".drag-handle");
+    if (!handle) return;
+    const item = handle.closest(".list-task-item");
+    if (!item) return;
+
+    // Start a long-press timer (150ms) to distinguish drag from scroll
+    touchStartY = e.touches[0].clientY;
+    touchCurrentY = touchStartY;
+
+    longPressTimer = setTimeout(() => {
+      touchStarted = true;
+      draggedEl = item;
+      item.classList.add("dragging");
+      document.body.style.overflow = "hidden";
+    }, 150);
+  }, { passive: false });
+
+  container.addEventListener("touchmove", (e) => {
+    if (!touchStarted || !draggedEl) {
+      // If we haven't committed to dragging yet, cancel if moved too far
+      if (longPressTimer) {
+        const dy = Math.abs(e.touches[0].clientY - touchStartY);
+        if (dy > 10) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      }
+      return;
+    }
+
+    e.preventDefault();
+    touchCurrentY = e.touches[0].clientY;
+
+    const target = document.elementFromPoint(e.touches[0].clientX, touchCurrentY);
+    const targetItem = target ? target.closest(".list-task-item") : null;
+
+    container.querySelectorAll(".list-task-item").forEach((el) => el.classList.remove("drag-over"));
+
+    if (targetItem && targetItem !== draggedEl) {
+      targetItem.classList.add("drag-over");
+      const rect = targetItem.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+
+      if (touchCurrentY < midY) {
+        container.insertBefore(draggedEl, targetItem);
+      } else {
+        container.insertBefore(draggedEl, targetItem.nextSibling);
+      }
+    }
+  }, { passive: false });
+
+  container.addEventListener("touchend", (e) => {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+
+    if (touchStarted && draggedEl) {
+      draggedEl.classList.remove("dragging");
+      container.querySelectorAll(".list-task-item").forEach((el) => el.classList.remove("drag-over"));
+      document.body.style.overflow = "";
+      saveListOrder(listId);
+      draggedEl = null;
+    }
+    touchStarted = false;
+  });
+
+  container.addEventListener("touchcancel", (e) => {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+
+    if (draggedEl) {
+      draggedEl.classList.remove("dragging");
+      container.querySelectorAll(".list-task-item").forEach((el) => el.classList.remove("drag-over"));
+      document.body.style.overflow = "";
+      draggedEl = null;
+    }
+    touchStarted = false;
   });
 }
 
