@@ -140,6 +140,14 @@ function showApp() {
   document.getElementById("auth-section").classList.add("hidden");
   document.getElementById("main-section").classList.remove("hidden");
   document.getElementById("user-greeting").textContent = `Hi, ${username}`;
+  // Default to Lists tab
+  document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+  document.querySelectorAll(".tab-content").forEach((t) => t.classList.add("hidden"));
+  document.getElementById("lists-tab").classList.remove("hidden");
+  document.querySelectorAll(".tab").forEach((t) => {
+    if (t.textContent.includes("My Lists")) t.classList.add("active");
+  });
+  loadLists();
   loadHome();
 }
 
@@ -760,10 +768,18 @@ function closeListTaskDetail() {
   }
 }
 
-// Fetch all user tasks for the selector (exclude completed)
-async function fetchAllTasks() {
+// Fetch user tasks for the selector (exclude completed)
+// When listId is provided, show only tasks assigned to that list or unassigned.
+// When no listId (new list), show only tasks not assigned to any list.
+async function fetchAllTasks(listId) {
   try {
-    const all = await api("/tasks?sort_by=title&sort_order=asc");
+    let query = "/tasks?sort_by=title&sort_order=asc";
+    if (listId) {
+      query += `&available_for_list=${listId}`;
+    } else {
+      query += "&available_for_list=0";
+    }
+    const all = await api(query);
     allTasksCache = all.filter((t) => t.status !== "COMPLETE");
   } catch (err) {
     allTasksCache = [];
@@ -856,7 +872,7 @@ async function showListModal() {
 async function editListModal(listId) {
   try {
     const list = await api(`/lists/${listId}`);
-    await fetchAllTasks();
+    await fetchAllTasks(listId);
 
     document.getElementById("list-modal-title").textContent = "Edit List";
     document.getElementById("list-edit-id").value = listId;
@@ -911,7 +927,8 @@ async function saveInlineTask() {
     });
 
     // Refresh the tasks cache and re-render with the new task checked
-    await fetchAllTasks();
+    const currentListEditId = document.getElementById("list-edit-id").value;
+    await fetchAllTasks(currentListEditId || undefined);
     const currentlyChecked = getSelectedTaskIds();
     currentlyChecked.push(newTask.id);
     renderTaskSelector(currentlyChecked);

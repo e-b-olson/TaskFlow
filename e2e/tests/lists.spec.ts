@@ -118,7 +118,7 @@ test.describe("Lists", () => {
 
     // View list
     await page.click('.list-card:has-text("Workflow List")');
-    await expect(page.locator("#list-detail-content")).toContainText("PENDING");
+    await expect(page.locator('#list-detail-content button:has-text("Start")')).toBeVisible();
 
     // Start the task
     await page.click('button:has-text("Start")');

@@ -31,6 +31,7 @@ def get_tasks():
     has_deadline = request.args.get("has_deadline")
     deadline_before = request.args.get("deadline_before")
     deadline_after = request.args.get("deadline_after")
+    available_for_list = request.args.get("available_for_list")
 
     allowed_sort_fields = [
         "title", "status", "created_at", "started_at", "completed_at",
@@ -41,6 +42,18 @@ def get_tasks():
 
     query = "SELECT * FROM tasks WHERE user_id = %s"
     params = [user_id]
+
+    # Filter to only tasks assigned to this list or not assigned to any list
+    if available_for_list:
+        list_id_val = int(available_for_list)
+        if list_id_val == 0:
+            # New list: only show tasks not assigned to any list
+            query += " AND id NOT IN (SELECT task_id FROM task_list_items)"
+        else:
+            # Editing existing list: show tasks on this list + unassigned tasks
+            query += """ AND (id IN (SELECT task_id FROM task_list_items WHERE task_list_id = %s)
+                         OR id NOT IN (SELECT task_id FROM task_list_items))"""
+            params.append(list_id_val)
 
     if status:
         query += " AND status = %s"
