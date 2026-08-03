@@ -194,10 +194,12 @@ async function loadTopTask() {
     container.innerHTML = `
       <div class="task-card priority-${task.priority} home-task-card" onclick="viewTask(${task.id}); switchToTab('tasks')" style="cursor: pointer;">
         <div class="home-task-main">
-          <span class="badge badge-priority-${task.priority}">${task.priority}</span>
+          <span class="badge badge-priority-${task.priority} home-task-priority">${task.priority}</span>
           <span class="home-task-title">${escapeHtml(task.title)}</span>
-          <span class="badge badge-effort home-task-effort">${task.effort} effort</span>
-          ${task.time_estimate_minutes ? `<span class="home-task-time">⏱ ${task.time_estimate_minutes} min</span>` : ""}
+          <span class="home-task-meta">
+            <span class="badge badge-effort home-task-effort">${task.effort} effort</span>
+            ${task.time_estimate_minutes ? `<span class="home-task-time">⏱ ${task.time_estimate_minutes} min</span>` : ""}
+          </span>
           <div class="home-task-action">
             ${startBtn}
           </div>
