@@ -39,6 +39,10 @@
       <header>
         <h1>TaskFlow</h1>
         <div class="header-right">
+          <div id="home-streak" class="home-streak home-streak-pending">
+            <span class="streak-icon">🔥</span>
+            <span class="streak-count" id="home-streak-count">0</span>
+          </div>
           <span id="user-greeting"></span>
           <div class="hamburger-menu">
             <button class="hamburger-btn" onclick="toggleHamburgerMenu()" aria-label="Menu" aria-expanded="false" aria-controls="hamburger-dropdown">
@@ -62,10 +66,6 @@
         <button class="tab active" onclick="switchTab('lists')">My Lists</button>
         <button class="tab" onclick="switchTab('tasks')">All Tasks</button>
         <button class="tab" onclick="switchTab('smart')">Smart Builder</button>
-        <div id="home-streak" class="home-streak home-streak-pending">
-          <span class="streak-icon">🔥</span>
-          <span class="streak-count" id="home-streak-count">0</span>
-        </div>
       </nav>
 
       <!-- Home Tab -->

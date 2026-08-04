@@ -120,7 +120,7 @@ header h1 {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 #user-greeting { color: var(--text-muted); }
@@ -205,7 +205,6 @@ header h1 {
 /* Tabs */
 .tabs {
   display: flex;
-  align-items: center;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   padding: 0 2rem;
@@ -747,10 +746,10 @@ header h1 {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  margin-left: auto;
   padding: 0.35rem 0.7rem;
   border-radius: 999px;
   background: var(--bg);
+  margin-right: 0.5rem;
   transition: all 0.4s ease;
 }
 
