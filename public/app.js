@@ -140,14 +140,13 @@ function showApp() {
   document.getElementById("auth-section").classList.add("hidden");
   document.getElementById("main-section").classList.remove("hidden");
   document.getElementById("user-greeting").textContent = `Hi, ${username}`;
-  // Default to Lists tab
+  // Default to Home tab
   document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
   document.querySelectorAll(".tab-content").forEach((t) => t.classList.add("hidden"));
-  document.getElementById("lists-tab").classList.remove("hidden");
+  document.getElementById("home-tab").classList.remove("hidden");
   document.querySelectorAll(".tab").forEach((t) => {
-    if (t.textContent.includes("My Lists")) t.classList.add("active");
+    if (t.textContent.includes("Home")) t.classList.add("active");
   });
-  loadLists();
   loadHome();
 }
 
