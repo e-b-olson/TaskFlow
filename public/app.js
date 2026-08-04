@@ -132,6 +132,7 @@ function handleLogout() {
   username = null;
   localStorage.removeItem("token");
   localStorage.removeItem("username");
+  localStorage.removeItem("completedHomeTask");
   document.getElementById("auth-section").classList.remove("hidden");
   document.getElementById("main-section").classList.add("hidden");
 }
@@ -176,8 +177,74 @@ async function loadHome() {
   loadActivityGrid();
 }
 
+// Check if a completed home task should still be displayed (same calendar day in user's timezone)
+function getCompletedHomeTask() {
+  const stored = localStorage.getItem("completedHomeTask");
+  if (!stored) return null;
+
+  try {
+    const data = JSON.parse(stored);
+    const completedDate = new Date(data.completedAt);
+    const now = new Date();
+
+    // Compare calendar dates in the user's local timezone
+    const sameDay =
+      completedDate.getFullYear() === now.getFullYear() &&
+      completedDate.getMonth() === now.getMonth() &&
+      completedDate.getDate() === now.getDate();
+
+    if (sameDay) return data;
+
+    // Past midnight — clear it
+    localStorage.removeItem("completedHomeTask");
+    return null;
+  } catch {
+    localStorage.removeItem("completedHomeTask");
+    return null;
+  }
+}
+
+function saveCompletedHomeTask(task) {
+  const data = {
+    id: task.id,
+    title: task.title,
+    priority: task.priority,
+    effort: task.effort,
+    time_estimate_minutes: task.time_estimate_minutes,
+    completedAt: new Date().toISOString(),
+  };
+  localStorage.setItem("completedHomeTask", JSON.stringify(data));
+}
+
+function renderCompletedHomeCard(task) {
+  const container = document.getElementById("home-top-task-content");
+  container.innerHTML = `
+    <div class="task-card priority-${task.priority} home-task-card home-task-completed" id="home-top-task-card" style="pointer-events: none;">
+      <div class="home-task-main">
+        <span class="badge badge-priority-${task.priority} home-task-priority">${task.priority}</span>
+        <span class="home-task-title">${escapeHtml(task.title)}</span>
+        <span class="home-task-meta">
+          <span class="badge badge-effort home-task-effort">${task.effort} effort</span>
+          ${task.time_estimate_minutes ? `<span class="home-task-time">⏱ ${task.time_estimate_minutes} min</span>` : ""}
+        </span>
+        <div class="home-task-action">
+          <span class="badge badge-status-COMPLETE">Done! 🎉</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 async function loadTopTask() {
   const container = document.getElementById("home-top-task-content");
+
+  // If a task was completed today, keep showing it in celebration state
+  const completedToday = getCompletedHomeTask();
+  if (completedToday) {
+    renderCompletedHomeCard(completedToday);
+    return;
+  }
+
   try {
     const task = await api("/dashboard/top-task");
     if (!task) {
@@ -225,10 +292,14 @@ async function startHomeTask(taskId) {
 
 async function completeHomeTask(taskId) {
   try {
+    // Fetch the task data before completing so we can persist it for the celebration card
+    const task = await api(`/tasks/${taskId}`);
     await api(`/tasks/${taskId}`, {
       method: "PUT",
       body: JSON.stringify({ status: "COMPLETE" }),
     });
+    // Save to localStorage so the celebration persists until midnight
+    saveCompletedHomeTask(task);
     // Celebrate!
     const card = document.getElementById("home-top-task-card");
     if (card) {
