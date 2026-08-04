@@ -146,3 +146,140 @@ def get_activity():
         return jsonify({"error": "Internal server error"}), 500
     finally:
         pool.putconn(conn)
+
+
+@dashboard_bp.route("/streak", methods=["GET"])
+@authenticate
+def get_streak():
+    """Get the user's current daily streak and today's completed task (if any).
+
+    The client sends their local timezone via ?tz= query param (e.g. America/New_York)
+    so the server can determine the user's "today" and whether their streak is still alive.
+
+    Returns: { streak: int, completedToday: bool, completedTask: object|null }
+    """
+    from zoneinfo import ZoneInfo
+
+    user_id = request.user_id
+    tz_name = request.args.get("tz", "UTC")
+
+    try:
+        user_tz = ZoneInfo(tz_name)
+    except Exception:
+        user_tz = ZoneInfo("UTC")
+
+    user_today = datetime.now(user_tz).date()
+    user_yesterday = user_today - timedelta(days=1)
+
+    pool = get_pool()
+    conn = pool.getconn()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT current_streak, last_completed_date, completed_task_id
+                FROM daily_streaks
+                WHERE user_id = %s
+            """, (user_id,))
+            row = cur.fetchone()
+
+            if not row or not row["last_completed_date"]:
+                return jsonify({"streak": 0, "completedToday": False, "completedTask": None}), 200
+
+            last_date = row["last_completed_date"]
+            streak = row["current_streak"]
+            task_id = row["completed_task_id"]
+
+            if last_date == user_today:
+                # Fetch the completed task details
+                completed_task = None
+                if task_id:
+                    cur.execute("SELECT * FROM tasks WHERE id = %s", (task_id,))
+                    task_row = cur.fetchone()
+                    if task_row:
+                        completed_task = _serialize_task(task_row)
+                return jsonify({"streak": streak, "completedToday": True, "completedTask": completed_task}), 200
+            elif last_date == user_yesterday:
+                # Streak is alive but not yet completed today
+                return jsonify({"streak": streak, "completedToday": False, "completedTask": None}), 200
+            else:
+                # Streak is broken
+                return jsonify({"streak": 0, "completedToday": False, "completedTask": None}), 200
+    except Exception as e:
+        print(f"Error fetching streak: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+    finally:
+        pool.putconn(conn)
+
+
+@dashboard_bp.route("/streak/complete", methods=["POST"])
+@authenticate
+def complete_streak():
+    """Record that the user completed their daily top task.
+
+    The client sends their local timezone and the task ID in the request body.
+
+    Body: { "tz": "America/New_York", "task_id": 123 }
+    Returns: { streak: int, completedToday: true }
+    """
+    from zoneinfo import ZoneInfo
+
+    user_id = request.user_id
+    data = request.get_json(silent=True) or {}
+    tz_name = data.get("tz", "UTC")
+    task_id = data.get("task_id")
+
+    try:
+        user_tz = ZoneInfo(tz_name)
+    except Exception:
+        user_tz = ZoneInfo("UTC")
+
+    user_today = datetime.now(user_tz).date()
+    user_yesterday = user_today - timedelta(days=1)
+
+    pool = get_pool()
+    conn = pool.getconn()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT current_streak, last_completed_date
+                FROM daily_streaks
+                WHERE user_id = %s
+            """, (user_id,))
+            row = cur.fetchone()
+
+            if not row:
+                # First time — start streak at 1
+                cur.execute("""
+                    INSERT INTO daily_streaks (user_id, current_streak, last_completed_date, completed_task_id)
+                    VALUES (%s, 1, %s, %s)
+                """, (user_id, user_today, task_id))
+                conn.commit()
+                return jsonify({"streak": 1, "completedToday": True}), 200
+
+            last_date = row["last_completed_date"]
+
+            # Already completed today
+            if last_date == user_today:
+                return jsonify({"streak": row["current_streak"], "completedToday": True}), 200
+
+            # Continuing streak from yesterday
+            if last_date == user_yesterday:
+                new_streak = row["current_streak"] + 1
+            else:
+                # Streak was broken, starting fresh
+                new_streak = 1
+
+            cur.execute("""
+                UPDATE daily_streaks
+                SET current_streak = %s, last_completed_date = %s, completed_task_id = %s
+                WHERE user_id = %s
+            """, (new_streak, user_today, task_id, user_id))
+            conn.commit()
+
+            return jsonify({"streak": new_streak, "completedToday": True}), 200
+    except Exception as e:
+        conn.rollback()
+        print(f"Error recording streak: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+    finally:
+        pool.putconn(conn)

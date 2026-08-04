@@ -111,6 +111,27 @@ def init_db():
                 CREATE INDEX IF NOT EXISTS idx_task_lists_user_id ON task_lists(user_id);
                 CREATE INDEX IF NOT EXISTS idx_task_list_items_list ON task_list_items(task_list_id);
                 CREATE INDEX IF NOT EXISTS idx_task_list_items_task ON task_list_items(task_id);
+
+                CREATE TABLE IF NOT EXISTS daily_streaks (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    current_streak INTEGER NOT NULL DEFAULT 0,
+                    last_completed_date DATE,
+                    completed_task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
+                    UNIQUE(user_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_daily_streaks_user_id ON daily_streaks(user_id);
+
+                -- Add completed_task_id column if it doesn't exist (migration for existing DBs)
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'daily_streaks' AND column_name = 'completed_task_id'
+                    ) THEN
+                        ALTER TABLE daily_streaks ADD COLUMN completed_task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL;
+                    END IF;
+                END $$;
             """)
             # Release the advisory lock
             cur.execute("SELECT pg_advisory_unlock(1)")

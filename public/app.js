@@ -132,7 +132,6 @@ function handleLogout() {
   username = null;
   localStorage.removeItem("token");
   localStorage.removeItem("username");
-  localStorage.removeItem("completedHomeTask");
   document.getElementById("auth-section").classList.remove("hidden");
   document.getElementById("main-section").classList.add("hidden");
 }
@@ -177,43 +176,51 @@ async function loadHome() {
   loadActivityGrid();
 }
 
-// Check if a completed home task should still be displayed (same calendar day in user's timezone)
-function getCompletedHomeTask() {
-  const stored = localStorage.getItem("completedHomeTask");
-  if (!stored) return null;
-
+// Daily Streak Logic
+function getUserTimezone() {
   try {
-    const data = JSON.parse(stored);
-    const completedDate = new Date(data.completedAt);
-    const now = new Date();
-
-    // Compare calendar dates in the user's local timezone
-    const sameDay =
-      completedDate.getFullYear() === now.getFullYear() &&
-      completedDate.getMonth() === now.getMonth() &&
-      completedDate.getDate() === now.getDate();
-
-    if (sameDay) return data;
-
-    // Past midnight — clear it
-    localStorage.removeItem("completedHomeTask");
-    return null;
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
   } catch {
-    localStorage.removeItem("completedHomeTask");
+    return "UTC";
+  }
+}
+
+async function fetchStreak() {
+  try {
+    const tz = encodeURIComponent(getUserTimezone());
+    const data = await api(`/dashboard/streak?tz=${tz}`);
+    return data;
+  } catch {
+    return { streak: 0, completedToday: false, completedTask: null };
+  }
+}
+
+async function recordStreakCompletion(taskId) {
+  try {
+    const data = await api("/dashboard/streak/complete", {
+      method: "POST",
+      body: JSON.stringify({ tz: getUserTimezone(), task_id: taskId }),
+    });
+    return data;
+  } catch {
     return null;
   }
 }
 
-function saveCompletedHomeTask(task) {
-  const data = {
-    id: task.id,
-    title: task.title,
-    priority: task.priority,
-    effort: task.effort,
-    time_estimate_minutes: task.time_estimate_minutes,
-    completedAt: new Date().toISOString(),
-  };
-  localStorage.setItem("completedHomeTask", JSON.stringify(data));
+function renderStreakImmediate(streak, completedToday) {
+  const streakEl = document.getElementById("home-streak");
+  const countEl = document.getElementById("home-streak-count");
+  if (!streakEl || !countEl) return;
+
+  countEl.textContent = streak;
+
+  if (completedToday) {
+    streakEl.classList.remove("home-streak-pending");
+    streakEl.classList.add("home-streak-active");
+  } else {
+    streakEl.classList.remove("home-streak-active");
+    streakEl.classList.add("home-streak-pending");
+  }
 }
 
 function renderCompletedHomeCard(task) {
@@ -238,10 +245,12 @@ function renderCompletedHomeCard(task) {
 async function loadTopTask() {
   const container = document.getElementById("home-top-task-content");
 
-  // If a task was completed today, keep showing it in celebration state
-  const completedToday = getCompletedHomeTask();
-  if (completedToday) {
-    renderCompletedHomeCard(completedToday);
+  // Check with the server if a task was already completed today
+  const streakData = await fetchStreak();
+  renderStreakImmediate(streakData.streak, streakData.completedToday);
+
+  if (streakData.completedToday && streakData.completedTask) {
+    renderCompletedHomeCard(streakData.completedTask);
     return;
   }
 
@@ -292,14 +301,17 @@ async function startHomeTask(taskId) {
 
 async function completeHomeTask(taskId) {
   try {
-    // Fetch the task data before completing so we can persist it for the celebration card
+    // Fetch the task data before completing so we can use it for the celebration card
     const task = await api(`/tasks/${taskId}`);
     await api(`/tasks/${taskId}`, {
       method: "PUT",
       body: JSON.stringify({ status: "COMPLETE" }),
     });
-    // Save to localStorage so the celebration persists until midnight
-    saveCompletedHomeTask(task);
+    // Record streak completion on the server (also persists the completed task)
+    const streakData = await recordStreakCompletion(taskId);
+    if (streakData) {
+      renderStreakImmediate(streakData.streak, streakData.completedToday);
+    }
     // Celebrate!
     const card = document.getElementById("home-top-task-card");
     if (card) {
