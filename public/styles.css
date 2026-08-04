@@ -797,6 +797,32 @@ header h1 {
   padding: 0.75rem 1.25rem;
 }
 
+/* Home task completion celebration */
+.home-task-card.home-task-completed {
+  border-left-color: var(--success) !important;
+  border: 2px solid var(--success);
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.3), 0 0 32px rgba(16, 185, 129, 0.15);
+  animation: celebratePulse 1.5s ease-in-out 3;
+  background: linear-gradient(135deg, var(--surface) 0%, #ecfdf5 100%);
+}
+
+@keyframes celebratePulse {
+  0%, 100% {
+    box-shadow: 0 0 16px rgba(16, 185, 129, 0.3), 0 0 32px rgba(16, 185, 129, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(16, 185, 129, 0.5), 0 0 48px rgba(16, 185, 129, 0.25);
+  }
+}
+
+.btn-complete-home {
+  background: var(--success);
+}
+
+.btn-complete-home:hover {
+  background: #059669;
+}
+
 .home-task-priority {
   flex-shrink: 0;
 }

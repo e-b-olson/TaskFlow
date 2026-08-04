@@ -184,14 +184,15 @@ async function loadTopTask() {
       container.innerHTML = '<p class="text-muted">No pending tasks. You\'re all caught up!</p>';
       return;
     }
-    const startBtn = task.status === "PENDING"
-      ? `<button class="btn-primary btn-small" onclick="event.stopPropagation(); startHomeTask(${task.id})">Start</button>`
-      : task.status === "IN_PROGRESS"
-        ? `<span class="badge badge-status-IN_PROGRESS">In Progress</span>`
-        : "";
+    let actionHtml = "";
+    if (task.status === "PENDING") {
+      actionHtml = `<button class="btn-primary btn-small" onclick="event.stopPropagation(); startHomeTask(${task.id})">Start</button>`;
+    } else if (task.status === "IN_PROGRESS") {
+      actionHtml = `<button class="btn-primary btn-small btn-complete-home" onclick="event.stopPropagation(); completeHomeTask(${task.id})">Complete</button>`;
+    }
 
     container.innerHTML = `
-      <div class="task-card priority-${task.priority} home-task-card" onclick="viewTask(${task.id}); switchToTab('tasks')" style="cursor: pointer;">
+      <div class="task-card priority-${task.priority} home-task-card" id="home-top-task-card" onclick="viewTask(${task.id}); switchToTab('tasks')" style="cursor: pointer;">
         <div class="home-task-main">
           <span class="badge badge-priority-${task.priority} home-task-priority">${task.priority}</span>
           <span class="home-task-title">${escapeHtml(task.title)}</span>
@@ -200,7 +201,7 @@ async function loadTopTask() {
             ${task.time_estimate_minutes ? `<span class="home-task-time">⏱ ${task.time_estimate_minutes} min</span>` : ""}
           </span>
           <div class="home-task-action">
-            ${startBtn}
+            ${actionHtml}
           </div>
         </div>
       </div>
@@ -220,6 +221,98 @@ async function startHomeTask(taskId) {
   } catch (err) {
     alert(err.message);
   }
+}
+
+async function completeHomeTask(taskId) {
+  try {
+    await api(`/tasks/${taskId}`, {
+      method: "PUT",
+      body: JSON.stringify({ status: "COMPLETE" }),
+    });
+    // Celebrate!
+    const card = document.getElementById("home-top-task-card");
+    if (card) {
+      card.classList.add("home-task-completed");
+      card.style.pointerEvents = "none";
+      // Replace action button with a congrats message
+      const actionDiv = card.querySelector(".home-task-action");
+      if (actionDiv) {
+        actionDiv.innerHTML = '<span class="badge badge-status-COMPLETE">Done! 🎉</span>';
+      }
+    }
+    launchConfetti();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+// Confetti celebration animation
+function launchConfetti() {
+  const canvas = document.createElement("canvas");
+  canvas.id = "confetti-canvas";
+  canvas.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;";
+  document.body.appendChild(canvas);
+
+  const ctx = canvas.getContext("2d");
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const colors = ["#10b981", "#4f46e5", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899"];
+  const confettiCount = 150;
+  const particles = [];
+
+  for (let i = 0; i < confettiCount; i++) {
+    particles.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height - canvas.height,
+      w: Math.random() * 10 + 5,
+      h: Math.random() * 6 + 3,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      vx: (Math.random() - 0.5) * 4,
+      vy: Math.random() * 3 + 2,
+      rotation: Math.random() * 360,
+      rotationSpeed: (Math.random() - 0.5) * 10,
+      opacity: 1,
+    });
+  }
+
+  let frame = 0;
+  const maxFrames = 180; // ~3 seconds at 60fps
+
+  function animate() {
+    frame++;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Start fading out in the last third
+    const fadeStart = maxFrames * 0.66;
+
+    for (const p of particles) {
+      p.x += p.vx;
+      p.vy += 0.05; // gravity
+      p.y += p.vy;
+      p.rotation += p.rotationSpeed;
+
+      if (frame > fadeStart) {
+        p.opacity = Math.max(0, 1 - (frame - fadeStart) / (maxFrames - fadeStart));
+      }
+
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate((p.rotation * Math.PI) / 180);
+      ctx.globalAlpha = p.opacity;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    }
+
+    if (frame < maxFrames) {
+      requestAnimationFrame(animate);
+    } else {
+      canvas.remove();
+    }
+  }
+
+  requestAnimationFrame(animate);
 }
 
 async function loadRecentList() {
