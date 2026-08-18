@@ -660,8 +660,19 @@ async function viewTask(id) {
           <button class="btn-secondary" onclick="showAddToList(${task.id})">Add to List</button>
           <button class="btn-danger" onclick="deleteTask(${task.id})">Delete</button>
         </div>
+        <div class="subtasks-section">
+          <div class="subtasks-header">
+            <h3>Sub-tasks</h3>
+            <button class="btn-add-subtask" onclick="showSubtaskModal(${task.id})" aria-label="Add sub-task" title="Add sub-task">+</button>
+          </div>
+          <div id="subtasks-list" class="subtasks-list">
+            <p class="text-muted">Loading...</p>
+          </div>
+        </div>
       </div>
     `;
+
+    loadSubtasks(task.id);
   } catch (err) {
     alert(err.message);
   }
@@ -1090,8 +1101,19 @@ async function viewTaskFromList(taskId, listId) {
           <button class="btn-primary" onclick="editTask(${task.id})">Edit</button>
           <button class="btn-secondary" onclick="showAddToList(${task.id})">Add to List</button>
         </div>
+        <div class="subtasks-section">
+          <div class="subtasks-header">
+            <h3>Sub-tasks</h3>
+            <button class="btn-add-subtask" onclick="showSubtaskModal(${task.id})" aria-label="Add sub-task" title="Add sub-task">+</button>
+          </div>
+          <div id="list-subtasks-list" class="subtasks-list">
+            <p class="text-muted">Loading...</p>
+          </div>
+        </div>
       </div>
     `;
+
+    loadSubtasks(task.id, "list-subtasks-list");
   } catch (err) {
     alert(err.message);
   }
@@ -1491,6 +1513,77 @@ async function saveQuickTask() {
     });
     closeQuickTaskModal();
     loadTasks();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+// Sub-tasks
+let currentSubtaskParentId = null;
+
+async function loadSubtasks(parentId, containerId = "subtasks-list") {
+  const container = document.getElementById(containerId);
+  try {
+    const subtasks = await api(`/tasks/${parentId}/subtasks`);
+    if (subtasks.length === 0) {
+      container.innerHTML = '<p class="text-muted">No sub-tasks yet.</p>';
+      return;
+    }
+    container.innerHTML = subtasks.map((st) => `
+      <div class="subtask-item" onclick="viewTask(${st.id})" style="cursor: pointer;">
+        <span class="badge badge-status-${st.status}">${formatStatus(st.status)}</span>
+        <span class="subtask-title">${escapeHtml(st.title)}</span>
+        <span class="badge badge-priority-${st.priority}">${st.priority}</span>
+      </div>
+    `).join("");
+  } catch (err) {
+    container.innerHTML = '<p class="text-muted">Could not load sub-tasks.</p>';
+  }
+}
+
+function showSubtaskModal(parentId) {
+  currentSubtaskParentId = parentId;
+  document.getElementById("subtask-modal").classList.remove("hidden");
+  document.getElementById("subtask-title").value = "";
+  document.getElementById("subtask-description").value = "";
+  document.getElementById("subtask-priority").value = "MEDIUM";
+  document.getElementById("subtask-effort").value = "MEDIUM";
+  document.getElementById("subtask-estimate").value = "";
+  document.getElementById("subtask-title").focus();
+}
+
+function closeSubtaskModal() {
+  document.getElementById("subtask-modal").classList.add("hidden");
+  currentSubtaskParentId = null;
+}
+
+async function saveSubtask() {
+  const title = document.getElementById("subtask-title").value.trim();
+  if (!title) {
+    alert("Title is required");
+    return;
+  }
+
+  const parentId = currentSubtaskParentId;
+  const data = {
+    title,
+    description: document.getElementById("subtask-description").value.trim() || null,
+    priority: document.getElementById("subtask-priority").value,
+    effort: document.getElementById("subtask-effort").value,
+    time_estimate_minutes: parseInt(document.getElementById("subtask-estimate").value) || null,
+    parent_task_id: parentId,
+  };
+
+  try {
+    await api("/tasks", { method: "POST", body: JSON.stringify(data) });
+    closeSubtaskModal();
+    // Refresh the subtasks list in whichever view is currently active
+    const listContainer = document.getElementById("list-subtasks-list");
+    if (listContainer && !document.getElementById("list-task-detail").classList.contains("hidden")) {
+      loadSubtasks(parentId, "list-subtasks-list");
+    } else {
+      loadSubtasks(parentId);
+    }
   } catch (err) {
     alert(err.message);
   }

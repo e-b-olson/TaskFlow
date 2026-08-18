@@ -1019,3 +1019,72 @@ header h1 {
 .list-task-item.drag-over {
   border-top: 2px solid var(--primary);
 }
+
+/* Sub-tasks Section */
+.subtasks-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.subtasks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.subtasks-header h3 {
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.btn-add-subtask {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary);
+  color: white;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, transform 0.15s;
+  box-shadow: var(--shadow);
+}
+
+.btn-add-subtask:hover {
+  background: var(--primary-hover);
+  transform: scale(1.1);
+}
+
+.subtasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.subtask-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.subtask-item:hover {
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.subtask-title {
+  flex: 1;
+  font-size: 0.9rem;
+  font-weight: 500;
+}

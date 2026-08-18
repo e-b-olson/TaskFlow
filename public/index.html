@@ -374,6 +374,52 @@
         </div>
       </div>
     </div>
+
+    <!-- Sub-task Modal -->
+    <div id="subtask-modal" class="modal hidden">
+      <div class="modal-content">
+        <button class="modal-close" onclick="closeSubtaskModal()" aria-label="Close">&times;</button>
+        <div class="modal-branding">
+          <span class="modal-branding-icon">📎</span>
+          <span class="modal-branding-text">Sub-task</span>
+        </div>
+        <h2>New Sub-task</h2>
+        <div class="form-group">
+          <label for="subtask-title">Title *</label>
+          <input type="text" id="subtask-title" placeholder="Sub-task title">
+        </div>
+        <div class="form-group">
+          <label for="subtask-description">Description</label>
+          <textarea id="subtask-description" placeholder="Optional description"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="subtask-priority">Priority</label>
+            <select id="subtask-priority">
+              <option value="HIGH">High</option>
+              <option value="MEDIUM" selected>Medium</option>
+              <option value="LOW">Low</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="subtask-effort">Effort</label>
+            <select id="subtask-effort">
+              <option value="HIGH">High</option>
+              <option value="MEDIUM" selected>Medium</option>
+              <option value="LOW">Low</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="subtask-estimate">Time (min)</label>
+            <input type="number" id="subtask-estimate" min="1" placeholder="e.g. 15">
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button onclick="closeSubtaskModal()" class="btn-secondary">Cancel</button>
+          <button onclick="saveSubtask()" class="btn-primary">Create</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="__BASE_PATH__/app.js"></script>
