@@ -1529,15 +1529,177 @@ async function loadSubtasks(parentId, containerId = "subtasks-list") {
       container.innerHTML = '<p class="text-muted">No sub-tasks yet.</p>';
       return;
     }
-    container.innerHTML = subtasks.map((st) => `
-      <div class="subtask-item" onclick="viewTask(${st.id})" style="cursor: pointer;">
-        <span class="badge badge-status-${st.status}">${formatStatus(st.status)}</span>
-        <span class="subtask-title">${escapeHtml(st.title)}</span>
-        <span class="badge badge-priority-${st.priority}">${st.priority}</span>
+    container.innerHTML = `<div class="subtasks-sortable" data-parent-id="${parentId}">` + subtasks.map((st) => `
+      <div class="subtask-item" data-task-id="${st.id}" draggable="true">
+        <span class="drag-handle" aria-label="Drag to reorder">⠿</span>
+        <input type="checkbox" class="subtask-checkbox" ${st.status === "COMPLETE" ? "checked" : ""}
+          onclick="event.stopPropagation(); toggleSubtaskStatus(${st.id}, '${st.status}', ${parentId}, '${containerId}')"
+          aria-label="Mark ${st.status === 'COMPLETE' ? 'incomplete' : 'complete'}">
+        <span class="subtask-title ${st.status === "COMPLETE" ? "subtask-done" : ""}" onclick="viewTask(${st.id})" style="cursor: pointer;">${escapeHtml(st.title)}</span>
+        ${st.time_estimate_minutes ? `<span class="subtask-time">⏱ ${st.time_estimate_minutes} min</span>` : ""}
       </div>
-    `).join("");
+    `).join("") + "</div>";
+
+    initSubtaskDragAndDrop(parentId, containerId);
   } catch (err) {
     container.innerHTML = '<p class="text-muted">Could not load sub-tasks.</p>';
+  }
+}
+
+async function toggleSubtaskStatus(taskId, currentStatus, parentId, containerId) {
+  const newStatus = currentStatus === "COMPLETE" ? "PENDING" : "COMPLETE";
+  try {
+    await api(`/tasks/${taskId}`, {
+      method: "PUT",
+      body: JSON.stringify({ status: newStatus }),
+    });
+    loadSubtasks(parentId, containerId);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+function initSubtaskDragAndDrop(parentId, containerId) {
+  const wrapper = document.getElementById(containerId);
+  const container = wrapper.querySelector(".subtasks-sortable");
+  if (!container) return;
+
+  let draggedEl = null;
+
+  // --- Desktop drag events ---
+  container.addEventListener("dragstart", (e) => {
+    const item = e.target.closest(".subtask-item");
+    if (!item) return;
+    draggedEl = item;
+    item.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+  });
+
+  container.addEventListener("dragend", () => {
+    if (draggedEl) {
+      draggedEl.classList.remove("dragging");
+      draggedEl = null;
+    }
+    container.querySelectorAll(".subtask-item").forEach((el) => el.classList.remove("drag-over"));
+    saveSubtaskOrder(parentId, containerId);
+  });
+
+  container.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const target = e.target.closest(".subtask-item");
+    if (!target || target === draggedEl) return;
+
+    const rect = target.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+
+    container.querySelectorAll(".subtask-item").forEach((el) => el.classList.remove("drag-over"));
+    target.classList.add("drag-over");
+
+    if (e.clientY < midY) {
+      container.insertBefore(draggedEl, target);
+    } else {
+      container.insertBefore(draggedEl, target.nextSibling);
+    }
+  });
+
+  // --- Touch events for mobile ---
+  let touchStartY = 0;
+  let touchStarted = false;
+  let longPressTimer = null;
+
+  container.addEventListener("touchstart", (e) => {
+    const handle = e.target.closest(".drag-handle");
+    if (!handle) return;
+    const item = handle.closest(".subtask-item");
+    if (!item) return;
+
+    touchStartY = e.touches[0].clientY;
+
+    longPressTimer = setTimeout(() => {
+      touchStarted = true;
+      draggedEl = item;
+      item.classList.add("dragging");
+      document.body.style.overflow = "hidden";
+    }, 150);
+  }, { passive: false });
+
+  container.addEventListener("touchmove", (e) => {
+    if (!touchStarted || !draggedEl) {
+      if (longPressTimer) {
+        const dy = Math.abs(e.touches[0].clientY - touchStartY);
+        if (dy > 10) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      }
+      return;
+    }
+
+    e.preventDefault();
+    const touchY = e.touches[0].clientY;
+
+    const target = document.elementFromPoint(e.touches[0].clientX, touchY);
+    const targetItem = target ? target.closest(".subtask-item") : null;
+
+    container.querySelectorAll(".subtask-item").forEach((el) => el.classList.remove("drag-over"));
+
+    if (targetItem && targetItem !== draggedEl) {
+      targetItem.classList.add("drag-over");
+      const rect = targetItem.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+
+      if (touchY < midY) {
+        container.insertBefore(draggedEl, targetItem);
+      } else {
+        container.insertBefore(draggedEl, targetItem.nextSibling);
+      }
+    }
+  }, { passive: false });
+
+  container.addEventListener("touchend", () => {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+
+    if (touchStarted && draggedEl) {
+      draggedEl.classList.remove("dragging");
+      container.querySelectorAll(".subtask-item").forEach((el) => el.classList.remove("drag-over"));
+      document.body.style.overflow = "";
+      saveSubtaskOrder(parentId, containerId);
+      draggedEl = null;
+    }
+    touchStarted = false;
+  });
+
+  container.addEventListener("touchcancel", () => {
+    clearTimeout(longPressTimer);
+    longPressTimer = null;
+
+    if (draggedEl) {
+      draggedEl.classList.remove("dragging");
+      container.querySelectorAll(".subtask-item").forEach((el) => el.classList.remove("drag-over"));
+      document.body.style.overflow = "";
+      draggedEl = null;
+    }
+    touchStarted = false;
+  });
+}
+
+async function saveSubtaskOrder(parentId, containerId) {
+  const wrapper = document.getElementById(containerId);
+  const container = wrapper.querySelector(".subtasks-sortable");
+  if (!container) return;
+
+  const taskIds = Array.from(container.querySelectorAll(".subtask-item[data-task-id]"))
+    .map((el) => parseInt(el.dataset.taskId));
+
+  try {
+    await api(`/tasks/${parentId}/reorder`, {
+      method: "PUT",
+      body: JSON.stringify({ task_ids: taskIds }),
+    });
+  } catch (err) {
+    console.error("Failed to save subtask order:", err);
   }
 }
 
