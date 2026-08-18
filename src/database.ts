@@ -22,6 +22,7 @@ export async function initializeDatabase(): Promise<void> {
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         parent_task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL DEFAULT 0,
         title TEXT NOT NULL,
         description TEXT,
         status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'IN_PROGRESS', 'COMPLETE')),

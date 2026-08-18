@@ -79,6 +79,39 @@ If migrating from a previous SQLite-based version:
 docker compose --profile migration up migrate
 ```
 
+## Testing
+
+Tests run inside Docker against a dedicated test PostgreSQL database (port 5434), completely isolated from app data.
+
+### Run all tests
+
+```bash
+docker compose -f docker-compose.test.yml run --rm --build api-tests
+```
+
+This will:
+1. Start the test database container (if not already running)
+2. Build the test image with your latest code
+3. Run the full pytest suite and report results
+
+### Start/stop the test database independently
+
+```bash
+# Start
+docker compose -f docker-compose.test.yml up -d test-db
+
+# Stop and remove
+docker compose -f docker-compose.test.yml down
+```
+
+### Run end-to-end tests (Playwright)
+
+```bash
+docker compose -f docker-compose.test.yml run --rm --build e2e-tests
+```
+
+This starts the full stack (test DB, API, frontend) and runs Playwright browser tests against it.
+
 ## API Reference
 
 All endpoints use JSON request/response bodies. Protected routes require an `Authorization: Bearer <token>` header.

@@ -175,13 +175,22 @@ def create_task():
                 if not cur.fetchone():
                     return jsonify({"error": "Parent task not found"}), 404
 
+            # Auto-assign position for sub-tasks (append to end)
+            position = 0
+            if parent_task_id is not None:
+                cur.execute(
+                    "SELECT COALESCE(MAX(position), -1) + 1 AS next_pos FROM tasks WHERE parent_task_id = %s",
+                    (parent_task_id,),
+                )
+                position = cur.fetchone()["next_pos"]
+
             cur.execute(
                 """INSERT INTO tasks (user_id, title, description, status, deadline,
-                   time_estimate_minutes, effort, priority, cost, materials, parent_task_id)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   time_estimate_minutes, effort, priority, cost, materials, parent_task_id, position)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
                 (user_id, title, description, status, deadline,
-                 time_estimate_minutes, effort, priority, cost, materials, parent_task_id),
+                 time_estimate_minutes, effort, priority, cost, materials, parent_task_id, position),
             )
             row = cur.fetchone()
         conn.commit()
@@ -295,15 +304,24 @@ def clone_task(task_id):
             return jsonify({"error": "Task not found"}), 404
 
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Auto-assign position (append to end of sibling list)
+            position = 0
+            if existing["parent_task_id"] is not None:
+                cur.execute(
+                    "SELECT COALESCE(MAX(position), -1) + 1 AS next_pos FROM tasks WHERE parent_task_id = %s",
+                    (existing["parent_task_id"],),
+                )
+                position = cur.fetchone()["next_pos"]
+
             cur.execute(
                 """INSERT INTO tasks (user_id, title, description, status, deadline,
-                   time_estimate_minutes, effort, priority, cost, materials, parent_task_id)
-                   VALUES (%s, %s, %s, 'PENDING', %s, %s, %s, %s, %s, %s, %s)
+                   time_estimate_minutes, effort, priority, cost, materials, parent_task_id, position)
+                   VALUES (%s, %s, %s, 'PENDING', %s, %s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
                 (user_id, f"{existing['title']} (copy)", existing["description"],
                  existing["deadline"], existing["time_estimate_minutes"], existing["effort"],
                  existing["priority"], existing["cost"], existing["materials"],
-                 existing["parent_task_id"]),
+                 existing["parent_task_id"], position),
             )
             row = cur.fetchone()
         conn.commit()
@@ -311,6 +329,75 @@ def clone_task(task_id):
     except Exception as e:
         conn.rollback()
         print(f"Error cloning task: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+    finally:
+        pool.putconn(conn)
+
+
+@tasks_bp.route("/<int:task_id>/subtasks", methods=["GET"])
+@authenticate
+def get_subtasks(task_id):
+    """Get all sub-tasks of a task, ordered by position."""
+    user_id = request.user_id
+
+    pool = get_pool()
+    conn = pool.getconn()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Verify parent task exists and belongs to user
+            cur.execute(
+                "SELECT id FROM tasks WHERE id = %s AND user_id = %s",
+                (task_id, user_id),
+            )
+            if not cur.fetchone():
+                return jsonify({"error": "Task not found"}), 404
+
+            cur.execute(
+                "SELECT * FROM tasks WHERE parent_task_id = %s ORDER BY position ASC",
+                (task_id,),
+            )
+            rows = cur.fetchall()
+        return jsonify([_serialize_task(r) for r in rows]), 200
+    except Exception as e:
+        print(f"Error fetching subtasks: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+    finally:
+        pool.putconn(conn)
+
+
+@tasks_bp.route("/<int:task_id>/reorder", methods=["PUT"])
+@authenticate
+def reorder_subtasks(task_id):
+    """Reorder the sub-tasks of a task."""
+    user_id = request.user_id
+    data = request.get_json() or {}
+    task_ids = data.get("task_ids")
+
+    if not isinstance(task_ids, list):
+        return jsonify({"error": "task_ids array is required"}), 400
+
+    pool = get_pool()
+    conn = pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            # Verify parent task exists and belongs to user
+            cur.execute(
+                "SELECT id FROM tasks WHERE id = %s AND user_id = %s",
+                (task_id, user_id),
+            )
+            if not cur.fetchone():
+                return jsonify({"error": "Task not found"}), 404
+
+            for i, tid in enumerate(task_ids):
+                cur.execute(
+                    "UPDATE tasks SET position = %s WHERE id = %s AND parent_task_id = %s",
+                    (i, tid, task_id),
+                )
+        conn.commit()
+        return jsonify({"message": "Reordered successfully"}), 200
+    except Exception as e:
+        conn.rollback()
+        print(f"Error reordering subtasks: {e}")
         return jsonify({"error": "Internal server error"}), 500
     finally:
         pool.putconn(conn)

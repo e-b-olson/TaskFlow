@@ -4,9 +4,14 @@ const BASE_PATH = document.currentScript
   ? new URL(document.currentScript.src).pathname.replace(/\/app\.js$/, '')
   : '';
 
+// Storage keys namespaced by base path to avoid collisions with other apps on the same domain
+const STORAGE_PREFIX = BASE_PATH || '/';
+const TOKEN_KEY = `${STORAGE_PREFIX}:token`;
+const USERNAME_KEY = `${STORAGE_PREFIX}:username`;
+
 // State
-let token = localStorage.getItem("token");
-let username = localStorage.getItem("username");
+let token = localStorage.getItem(TOKEN_KEY);
+let username = localStorage.getItem(USERNAME_KEY);
 let searchTimeout = null;
 
 // API helper
@@ -16,7 +21,7 @@ async function api(path, options = {}) {
 
   const res = await fetch(`${BASE_PATH}/api${path}`, { ...options, headers });
 
-  if (res.status === 401) {
+  if (res.status === 401 && !path.startsWith("/auth/")) {
     handleLogout();
     throw new Error("Session expired");
   }
@@ -94,8 +99,8 @@ async function handleLogin() {
     });
     token = data.token;
     username = data.username;
-    localStorage.setItem("token", token);
-    localStorage.setItem("username", username);
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(USERNAME_KEY, username);
     showApp();
   } catch (err) {
     showAuthError(err.message);
@@ -119,8 +124,8 @@ async function handleRegister() {
     });
     token = data.token;
     username = data.username;
-    localStorage.setItem("token", token);
-    localStorage.setItem("username", username);
+    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(USERNAME_KEY, username);
     showApp();
   } catch (err) {
     showAuthError(err.message);
@@ -130,8 +135,8 @@ async function handleRegister() {
 function handleLogout() {
   token = null;
   username = null;
-  localStorage.removeItem("token");
-  localStorage.removeItem("username");
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USERNAME_KEY);
   document.getElementById("auth-section").classList.remove("hidden");
   document.getElementById("main-section").classList.add("hidden");
 }

@@ -147,14 +147,24 @@ router.post("/", async (req: AuthRequest, res: Response) => {
       }
     }
 
+    // Auto-assign position for sub-tasks (append to end)
+    let position = 0;
+    if (parent_task_id) {
+      const maxPosResult = await pool.query(
+        "SELECT COALESCE(MAX(position), -1) + 1 as next_pos FROM tasks WHERE parent_task_id = $1",
+        [parent_task_id]
+      );
+      position = maxPosResult.rows[0].next_pos;
+    }
+
     const result = await pool.query(
       `INSERT INTO tasks (user_id, title, description, status, deadline,
-       time_estimate_minutes, effort, priority, cost, materials, parent_task_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       time_estimate_minutes, effort, priority, cost, materials, parent_task_id, position)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
       [userId, title, description || null, status, deadline || null,
        time_estimate_minutes || null, effort, priority, cost || null, materials || null,
-       parent_task_id || null]
+       parent_task_id || null, position]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -263,18 +273,102 @@ router.post("/:id/clone", async (req: AuthRequest, res: Response) => {
     }
 
     const existing = existingResult.rows[0];
+
+    // Auto-assign position (append to end of sibling list)
+    let position = 0;
+    if (existing.parent_task_id) {
+      const maxPosResult = await pool.query(
+        "SELECT COALESCE(MAX(position), -1) + 1 as next_pos FROM tasks WHERE parent_task_id = $1",
+        [existing.parent_task_id]
+      );
+      position = maxPosResult.rows[0].next_pos;
+    }
+
     const result = await pool.query(
       `INSERT INTO tasks (user_id, title, description, status, deadline,
-       time_estimate_minutes, effort, priority, cost, materials, parent_task_id)
-       VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7, $8, $9, $10)
+       time_estimate_minutes, effort, priority, cost, materials, parent_task_id, position)
+       VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [userId, `${existing.title} (copy)`, existing.description,
        existing.deadline, existing.time_estimate_minutes, existing.effort,
-       existing.priority, existing.cost, existing.materials, existing.parent_task_id]
+       existing.priority, existing.cost, existing.materials, existing.parent_task_id, position]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error("Error cloning task:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Get sub-tasks of a task, ordered by position
+router.get("/:id/subtasks", async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
+  const taskId = req.params.id;
+
+  try {
+    // Verify parent task exists and belongs to user
+    const parentResult = await pool.query(
+      "SELECT id FROM tasks WHERE id = $1 AND user_id = $2",
+      [taskId, userId]
+    );
+    if (parentResult.rows.length === 0) {
+      res.status(404).json({ error: "Task not found" });
+      return;
+    }
+
+    const result = await pool.query(
+      "SELECT * FROM tasks WHERE parent_task_id = $1 ORDER BY position ASC",
+      [taskId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error("Error fetching subtasks:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Reorder sub-tasks of a task
+router.put("/:id/reorder", async (req: AuthRequest, res: Response) => {
+  const userId = req.userId!;
+  const taskId = req.params.id;
+  const { task_ids } = req.body;
+
+  if (!Array.isArray(task_ids)) {
+    res.status(400).json({ error: "task_ids array is required" });
+    return;
+  }
+
+  try {
+    // Verify parent task exists and belongs to user
+    const parentResult = await pool.query(
+      "SELECT id FROM tasks WHERE id = $1 AND user_id = $2",
+      [taskId, userId]
+    );
+    if (parentResult.rows.length === 0) {
+      res.status(404).json({ error: "Task not found" });
+      return;
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      for (let i = 0; i < task_ids.length; i++) {
+        await client.query(
+          "UPDATE tasks SET position = $1 WHERE id = $2 AND parent_task_id = $3",
+          [i, task_ids[i], taskId]
+        );
+      }
+      await client.query("COMMIT");
+    } catch (txErr) {
+      await client.query("ROLLBACK");
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    res.json({ message: "Reordered successfully" });
+  } catch (err) {
+    console.error("Error reordering subtasks:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

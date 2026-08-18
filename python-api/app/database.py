@@ -74,6 +74,7 @@ def init_db():
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                     parent_task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
+                    position INTEGER NOT NULL DEFAULT 0,
                     title TEXT NOT NULL,
                     description TEXT,
                     status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'IN_PROGRESS', 'COMPLETE')),
@@ -109,7 +110,6 @@ def init_db():
                 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
                 CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
                 CREATE INDEX IF NOT EXISTS idx_tasks_deadline ON tasks(deadline);
-                CREATE INDEX IF NOT EXISTS idx_tasks_parent_task_id ON tasks(parent_task_id);
                 CREATE INDEX IF NOT EXISTS idx_task_lists_user_id ON task_lists(user_id);
                 CREATE INDEX IF NOT EXISTS idx_task_list_items_list ON task_list_items(task_list_id);
                 CREATE INDEX IF NOT EXISTS idx_task_list_items_task ON task_list_items(task_id);
@@ -144,6 +144,17 @@ def init_db():
                     ) THEN
                         ALTER TABLE tasks ADD COLUMN parent_task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE;
                         CREATE INDEX IF NOT EXISTS idx_tasks_parent_task_id ON tasks(parent_task_id);
+                    END IF;
+                END $$;
+
+                -- Add position column if it doesn't exist (migration for existing DBs)
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'tasks' AND column_name = 'position'
+                    ) THEN
+                        ALTER TABLE tasks ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
                     END IF;
                 END $$;
             """)

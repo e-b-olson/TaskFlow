@@ -347,3 +347,148 @@ class TestCloneSubTask:
         assert response.status_code == 201
         data = response.get_json()
         assert data["parent_task_id"] is None
+
+
+class TestSubTaskOrdering:
+    """Tests for sub-task position/ordering."""
+
+    def test_subtasks_have_sequential_positions(self, client, auth_headers, sample_task):
+        """Sub-tasks are assigned incrementing positions on creation."""
+        resp1 = client.post("/api/tasks", json={
+            "title": "First",
+            "parent_task_id": sample_task["id"],
+        }, headers=auth_headers)
+        resp2 = client.post("/api/tasks", json={
+            "title": "Second",
+            "parent_task_id": sample_task["id"],
+        }, headers=auth_headers)
+        resp3 = client.post("/api/tasks", json={
+            "title": "Third",
+            "parent_task_id": sample_task["id"],
+        }, headers=auth_headers)
+
+        assert resp1.get_json()["position"] == 0
+        assert resp2.get_json()["position"] == 1
+        assert resp3.get_json()["position"] == 2
+
+    def test_get_subtasks_returns_ordered(self, client, auth_headers, sample_task):
+        """GET /api/tasks/:id/subtasks returns sub-tasks ordered by position."""
+        client.post("/api/tasks", json={
+            "title": "First",
+            "parent_task_id": sample_task["id"],
+        }, headers=auth_headers)
+        client.post("/api/tasks", json={
+            "title": "Second",
+            "parent_task_id": sample_task["id"],
+        }, headers=auth_headers)
+        client.post("/api/tasks", json={
+            "title": "Third",
+            "parent_task_id": sample_task["id"],
+        }, headers=auth_headers)
+
+        response = client.get(f"/api/tasks/{sample_task['id']}/subtasks", headers=auth_headers)
+        assert response.status_code == 200
+        subtasks = response.get_json()
+        assert len(subtasks) == 3
+        assert subtasks[0]["title"] == "First"
+        assert subtasks[1]["title"] == "Second"
+        assert subtasks[2]["title"] == "Third"
+
+    def test_get_subtasks_task_not_found(self, client, auth_headers):
+        """GET /api/tasks/:id/subtasks returns 404 for non-existent task."""
+        response = client.get("/api/tasks/99999/subtasks", headers=auth_headers)
+        assert response.status_code == 404
+
+    def test_get_subtasks_empty(self, client, auth_headers, sample_task):
+        """GET /api/tasks/:id/subtasks returns empty list if no sub-tasks."""
+        response = client.get(f"/api/tasks/{sample_task['id']}/subtasks", headers=auth_headers)
+        assert response.status_code == 200
+        assert response.get_json() == []
+
+    def test_reorder_subtasks(self, client, auth_headers, sample_task):
+        """PUT /api/tasks/:id/reorder changes the position of sub-tasks."""
+        resp1 = client.post("/api/tasks", json={
+            "title": "First",
+            "parent_task_id": sample_task["id"],
+        }, headers=auth_headers)
+        resp2 = client.post("/api/tasks", json={
+            "title": "Second",
+            "parent_task_id": sample_task["id"],
+        }, headers=auth_headers)
+        resp3 = client.post("/api/tasks", json={
+            "title": "Third",
+            "parent_task_id": sample_task["id"],
+        }, headers=auth_headers)
+
+        id1 = resp1.get_json()["id"]
+        id2 = resp2.get_json()["id"]
+        id3 = resp3.get_json()["id"]
+
+        # Reverse the order
+        response = client.put(f"/api/tasks/{sample_task['id']}/reorder", json={
+            "task_ids": [id3, id2, id1],
+        }, headers=auth_headers)
+        assert response.status_code == 200
+
+        # Verify new order
+        response = client.get(f"/api/tasks/{sample_task['id']}/subtasks", headers=auth_headers)
+        subtasks = response.get_json()
+        assert subtasks[0]["title"] == "Third"
+        assert subtasks[1]["title"] == "Second"
+        assert subtasks[2]["title"] == "First"
+
+    def test_reorder_subtasks_task_not_found(self, client, auth_headers):
+        """PUT /api/tasks/:id/reorder returns 404 for non-existent task."""
+        response = client.put("/api/tasks/99999/reorder", json={
+            "task_ids": [1, 2],
+        }, headers=auth_headers)
+        assert response.status_code == 404
+
+    def test_reorder_subtasks_invalid_body(self, client, auth_headers, sample_task):
+        """PUT /api/tasks/:id/reorder returns 400 without task_ids array."""
+        response = client.put(f"/api/tasks/{sample_task['id']}/reorder", json={
+            "not_task_ids": [1, 2],
+        }, headers=auth_headers)
+        assert response.status_code == 400
+
+    def test_clone_subtask_gets_next_position(self, client, auth_headers, sample_task):
+        """Cloning a sub-task assigns the next position in the sibling list."""
+        client.post("/api/tasks", json={
+            "title": "First",
+            "parent_task_id": sample_task["id"],
+        }, headers=auth_headers)
+        resp2 = client.post("/api/tasks", json={
+            "title": "Second",
+            "parent_task_id": sample_task["id"],
+        }, headers=auth_headers)
+
+        # Clone the second sub-task
+        response = client.post(f"/api/tasks/{resp2.get_json()['id']}/clone", headers=auth_headers)
+        data = response.get_json()
+        assert data["position"] == 2  # next after 0, 1
+
+    def test_positions_independent_per_parent(self, client, auth_headers):
+        """Position numbering is independent for each parent task."""
+        resp_a = client.post("/api/tasks", json={"title": "Parent A"}, headers=auth_headers)
+        resp_b = client.post("/api/tasks", json={"title": "Parent B"}, headers=auth_headers)
+        parent_a = resp_a.get_json()
+        parent_b = resp_b.get_json()
+
+        # Add sub-tasks to both parents
+        resp1 = client.post("/api/tasks", json={
+            "title": "A-sub1",
+            "parent_task_id": parent_a["id"],
+        }, headers=auth_headers)
+        resp2 = client.post("/api/tasks", json={
+            "title": "B-sub1",
+            "parent_task_id": parent_b["id"],
+        }, headers=auth_headers)
+        resp3 = client.post("/api/tasks", json={
+            "title": "A-sub2",
+            "parent_task_id": parent_a["id"],
+        }, headers=auth_headers)
+
+        # Both start at 0 independently
+        assert resp1.get_json()["position"] == 0
+        assert resp2.get_json()["position"] == 0
+        assert resp3.get_json()["position"] == 1
