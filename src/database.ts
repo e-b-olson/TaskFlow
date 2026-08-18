@@ -21,6 +21,7 @@ export async function initializeDatabase(): Promise<void> {
       CREATE TABLE IF NOT EXISTS tasks (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        parent_task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
         title TEXT NOT NULL,
         description TEXT,
         status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'IN_PROGRESS', 'COMPLETE')),
@@ -56,6 +57,7 @@ export async function initializeDatabase(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
       CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
       CREATE INDEX IF NOT EXISTS idx_tasks_deadline ON tasks(deadline);
+      CREATE INDEX IF NOT EXISTS idx_tasks_parent_task_id ON tasks(parent_task_id);
       CREATE INDEX IF NOT EXISTS idx_task_lists_user_id ON task_lists(user_id);
       CREATE INDEX IF NOT EXISTS idx_task_list_items_list ON task_list_items(task_list_id);
       CREATE INDEX IF NOT EXISTS idx_task_list_items_task ON task_list_items(task_id);

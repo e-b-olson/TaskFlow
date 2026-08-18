@@ -39,6 +39,7 @@ def get_top_task():
             cur.execute("""
                 SELECT * FROM tasks
                 WHERE user_id = %s AND status != 'COMPLETE'
+                  AND parent_task_id IS NULL
                 ORDER BY
                     CASE priority
                         WHEN 'HIGH' THEN 1

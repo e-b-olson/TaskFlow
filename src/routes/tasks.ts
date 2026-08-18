@@ -5,6 +5,28 @@ import { authenticate, AuthRequest } from "../middleware/auth";
 const router = Router();
 router.use(authenticate);
 
+/**
+ * Check if setting proposedParentId as the parent of taskId would create a cycle.
+ * Walks up the ancestor chain from proposedParentId. If taskId appears among
+ * the ancestors, assigning it would create a loop.
+ */
+async function wouldCreateCycle(taskId: number, proposedParentId: number | null): Promise<boolean> {
+  if (proposedParentId === null) return false;
+  if (taskId === proposedParentId) return true;
+
+  const result = await pool.query(`
+    WITH RECURSIVE ancestors AS (
+      SELECT parent_task_id FROM tasks WHERE id = $1
+      UNION ALL
+      SELECT t.parent_task_id FROM tasks t
+      JOIN ancestors a ON t.id = a.parent_task_id
+    )
+    SELECT 1 FROM ancestors WHERE parent_task_id = $2 LIMIT 1
+  `, [proposedParentId, taskId]);
+
+  return result.rows.length > 0;
+}
+
 // Get all tasks for the user with optional sort and filter
 router.get("/", async (req: AuthRequest, res: Response) => {
   const userId = req.userId!;
@@ -27,7 +49,7 @@ router.get("/", async (req: AuthRequest, res: Response) => {
   const sortField = allowedSortFields.includes(sort_by as string) ? sort_by : "created_at";
   const sortOrder = sort_order === "asc" ? "ASC" : "DESC";
 
-  let query = "SELECT * FROM tasks WHERE user_id = $1";
+  let query = "SELECT * FROM tasks WHERE user_id = $1 AND parent_task_id IS NULL";
   const params: any[] = [userId];
   let paramIndex = 2;
 
@@ -104,6 +126,7 @@ router.post("/", async (req: AuthRequest, res: Response) => {
     priority = "MEDIUM",
     cost,
     materials,
+    parent_task_id,
   } = req.body;
 
   if (!title) {
@@ -112,13 +135,26 @@ router.post("/", async (req: AuthRequest, res: Response) => {
   }
 
   try {
+    // Validate parent_task_id exists and belongs to this user
+    if (parent_task_id) {
+      const parentCheck = await pool.query(
+        "SELECT id FROM tasks WHERE id = $1 AND user_id = $2",
+        [parent_task_id, userId]
+      );
+      if (parentCheck.rows.length === 0) {
+        res.status(404).json({ error: "Parent task not found" });
+        return;
+      }
+    }
+
     const result = await pool.query(
       `INSERT INTO tasks (user_id, title, description, status, deadline,
-       time_estimate_minutes, effort, priority, cost, materials)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       time_estimate_minutes, effort, priority, cost, materials, parent_task_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [userId, title, description || null, status, deadline || null,
-       time_estimate_minutes || null, effort, priority, cost || null, materials || null]
+       time_estimate_minutes || null, effort, priority, cost || null, materials || null,
+       parent_task_id || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -153,7 +189,29 @@ router.put("/:id", async (req: AuthRequest, res: Response) => {
       priority = existing.priority,
       cost = existing.cost,
       materials = existing.materials,
+      parent_task_id = existing.parent_task_id,
     } = req.body;
+
+    // Check for inheritance loop when parent_task_id is being changed
+    if (parent_task_id !== existing.parent_task_id) {
+      if (parent_task_id !== null && parent_task_id !== undefined) {
+        // Validate parent exists and belongs to user
+        const parentCheck = await pool.query(
+          "SELECT id FROM tasks WHERE id = $1 AND user_id = $2",
+          [parent_task_id, userId]
+        );
+        if (parentCheck.rows.length === 0) {
+          res.status(404).json({ error: "Parent task not found" });
+          return;
+        }
+
+        // Check for cycle
+        if (await wouldCreateCycle(Number(taskId), Number(parent_task_id))) {
+          res.status(400).json({ error: "Cannot set parent: would create a cycle" });
+          return;
+        }
+      }
+    }
 
     // Auto-set started_at when moving to IN_PROGRESS
     let started_at = existing.started_at;
@@ -175,11 +233,12 @@ router.put("/:id", async (req: AuthRequest, res: Response) => {
     const result = await pool.query(
       `UPDATE tasks SET title = $1, description = $2, status = $3, deadline = $4,
        time_estimate_minutes = $5, effort = $6, priority = $7, cost = $8, materials = $9,
-       started_at = $10, completed_at = $11
-       WHERE id = $12 AND user_id = $13
+       started_at = $10, completed_at = $11, parent_task_id = $12
+       WHERE id = $13 AND user_id = $14
        RETURNING *`,
       [title, description, status, deadline, time_estimate_minutes, effort,
-       priority, cost, materials, started_at, completed_at, taskId, userId]
+       priority, cost, materials, started_at, completed_at, parent_task_id,
+       taskId, userId]
     );
     res.json(result.rows[0]);
   } catch (err) {
@@ -206,12 +265,12 @@ router.post("/:id/clone", async (req: AuthRequest, res: Response) => {
     const existing = existingResult.rows[0];
     const result = await pool.query(
       `INSERT INTO tasks (user_id, title, description, status, deadline,
-       time_estimate_minutes, effort, priority, cost, materials)
-       VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7, $8, $9)
+       time_estimate_minutes, effort, priority, cost, materials, parent_task_id)
+       VALUES ($1, $2, $3, 'PENDING', $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [userId, `${existing.title} (copy)`, existing.description,
        existing.deadline, existing.time_estimate_minutes, existing.effort,
-       existing.priority, existing.cost, existing.materials]
+       existing.priority, existing.cost, existing.materials, existing.parent_task_id]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {

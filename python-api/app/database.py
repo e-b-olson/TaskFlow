@@ -73,6 +73,7 @@ def init_db():
                 CREATE TABLE IF NOT EXISTS tasks (
                     id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    parent_task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE,
                     title TEXT NOT NULL,
                     description TEXT,
                     status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'IN_PROGRESS', 'COMPLETE')),
@@ -108,6 +109,7 @@ def init_db():
                 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
                 CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority);
                 CREATE INDEX IF NOT EXISTS idx_tasks_deadline ON tasks(deadline);
+                CREATE INDEX IF NOT EXISTS idx_tasks_parent_task_id ON tasks(parent_task_id);
                 CREATE INDEX IF NOT EXISTS idx_task_lists_user_id ON task_lists(user_id);
                 CREATE INDEX IF NOT EXISTS idx_task_list_items_list ON task_list_items(task_list_id);
                 CREATE INDEX IF NOT EXISTS idx_task_list_items_task ON task_list_items(task_id);
@@ -130,6 +132,18 @@ def init_db():
                         WHERE table_name = 'daily_streaks' AND column_name = 'completed_task_id'
                     ) THEN
                         ALTER TABLE daily_streaks ADD COLUMN completed_task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL;
+                    END IF;
+                END $$;
+
+                -- Add parent_task_id column if it doesn't exist (migration for existing DBs)
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'tasks' AND column_name = 'parent_task_id'
+                    ) THEN
+                        ALTER TABLE tasks ADD COLUMN parent_task_id INTEGER REFERENCES tasks(id) ON DELETE CASCADE;
+                        CREATE INDEX IF NOT EXISTS idx_tasks_parent_task_id ON tasks(parent_task_id);
                     END IF;
                 END $$;
             """)

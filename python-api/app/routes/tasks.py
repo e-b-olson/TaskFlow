@@ -18,6 +18,30 @@ def _serialize_task(row):
     return result
 
 
+def _would_create_cycle(cur, task_id, proposed_parent_id):
+    """Check if setting proposed_parent_id as the parent of task_id would create a cycle.
+
+    Walks up the ancestor chain from proposed_parent_id. If task_id appears
+    among the ancestors, assigning it would create a loop.
+    Also rejects the trivial case where a task is its own parent.
+    """
+    if proposed_parent_id is None:
+        return False
+    if task_id == proposed_parent_id:
+        return True
+
+    cur.execute("""
+        WITH RECURSIVE ancestors AS (
+            SELECT parent_task_id FROM tasks WHERE id = %s
+            UNION ALL
+            SELECT t.parent_task_id FROM tasks t
+            JOIN ancestors a ON t.id = a.parent_task_id
+        )
+        SELECT 1 FROM ancestors WHERE parent_task_id = %s LIMIT 1
+    """, (proposed_parent_id, task_id))
+    return cur.fetchone() is not None
+
+
 @tasks_bp.route("", methods=["GET"])
 @authenticate
 def get_tasks():
@@ -40,7 +64,7 @@ def get_tasks():
     sort_field = sort_by if sort_by in allowed_sort_fields else "created_at"
     order = "ASC" if sort_order == "asc" else "DESC"
 
-    query = "SELECT * FROM tasks WHERE user_id = %s"
+    query = "SELECT * FROM tasks WHERE user_id = %s AND parent_task_id IS NULL"
     params = [user_id]
 
     # Filter to only tasks assigned to this list or not assigned to any list
@@ -136,18 +160,28 @@ def create_task():
     priority = data.get("priority", "MEDIUM")
     cost = data.get("cost")
     materials = data.get("materials")
+    parent_task_id = data.get("parent_task_id")
 
     pool = get_pool()
     conn = pool.getconn()
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Validate that parent_task_id exists and belongs to this user
+            if parent_task_id is not None:
+                cur.execute(
+                    "SELECT id FROM tasks WHERE id = %s AND user_id = %s",
+                    (parent_task_id, user_id),
+                )
+                if not cur.fetchone():
+                    return jsonify({"error": "Parent task not found"}), 404
+
             cur.execute(
                 """INSERT INTO tasks (user_id, title, description, status, deadline,
-                   time_estimate_minutes, effort, priority, cost, materials)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                   time_estimate_minutes, effort, priority, cost, materials, parent_task_id)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
                 (user_id, title, description, status, deadline,
-                 time_estimate_minutes, effort, priority, cost, materials),
+                 time_estimate_minutes, effort, priority, cost, materials, parent_task_id),
             )
             row = cur.fetchone()
         conn.commit()
@@ -188,6 +222,23 @@ def update_task(task_id):
         priority = data.get("priority", existing["priority"])
         cost = data.get("cost", existing["cost"])
         materials = data.get("materials", existing["materials"])
+        parent_task_id = data.get("parent_task_id", existing["parent_task_id"])
+
+        # Check for inheritance loop when parent_task_id is being changed
+        if parent_task_id != existing["parent_task_id"]:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                if parent_task_id is not None:
+                    # Validate parent exists and belongs to user
+                    cur.execute(
+                        "SELECT id FROM tasks WHERE id = %s AND user_id = %s",
+                        (parent_task_id, user_id),
+                    )
+                    if not cur.fetchone():
+                        return jsonify({"error": "Parent task not found"}), 404
+
+                    # Check for cycle
+                    if _would_create_cycle(cur, task_id, parent_task_id):
+                        return jsonify({"error": "Cannot set parent: would create a cycle"}), 400
 
         # Auto-set started_at when moving to IN_PROGRESS
         started_at = existing["started_at"]
@@ -207,11 +258,12 @@ def update_task(task_id):
             cur.execute(
                 """UPDATE tasks SET title = %s, description = %s, status = %s, deadline = %s,
                    time_estimate_minutes = %s, effort = %s, priority = %s, cost = %s, materials = %s,
-                   started_at = %s, completed_at = %s
+                   started_at = %s, completed_at = %s, parent_task_id = %s
                    WHERE id = %s AND user_id = %s
                    RETURNING *""",
                 (title, description, status, deadline, time_estimate_minutes, effort,
-                 priority, cost, materials, started_at, completed_at, task_id, user_id),
+                 priority, cost, materials, started_at, completed_at, parent_task_id,
+                 task_id, user_id),
             )
             row = cur.fetchone()
         conn.commit()
@@ -245,12 +297,13 @@ def clone_task(task_id):
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """INSERT INTO tasks (user_id, title, description, status, deadline,
-                   time_estimate_minutes, effort, priority, cost, materials)
-                   VALUES (%s, %s, %s, 'PENDING', %s, %s, %s, %s, %s, %s)
+                   time_estimate_minutes, effort, priority, cost, materials, parent_task_id)
+                   VALUES (%s, %s, %s, 'PENDING', %s, %s, %s, %s, %s, %s, %s)
                    RETURNING *""",
                 (user_id, f"{existing['title']} (copy)", existing["description"],
                  existing["deadline"], existing["time_estimate_minutes"], existing["effort"],
-                 existing["priority"], existing["cost"], existing["materials"]),
+                 existing["priority"], existing["cost"], existing["materials"],
+                 existing["parent_task_id"]),
             )
             row = cur.fetchone()
         conn.commit()
