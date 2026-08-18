@@ -733,6 +733,21 @@ async function saveTask() {
     }
     closeTaskModal();
 
+    // If we were editing a sub-task, refresh the parent task detail view
+    if (id && editingSubtaskParentId) {
+      const parentId = editingSubtaskParentId;
+      editingSubtaskParentId = null;
+      const taskDetail = document.getElementById("task-detail");
+      const listTaskDetail = document.getElementById("list-task-detail");
+      if (listTaskDetail && !listTaskDetail.classList.contains("hidden")) {
+        loadSubtasks(parentId, "list-subtasks-list");
+      } else if (taskDetail && !taskDetail.classList.contains("hidden")) {
+        loadSubtasks(parentId);
+      }
+      return;
+    }
+    editingSubtaskParentId = null;
+
     // If task detail is visible, refresh it; otherwise reload the task list
     const taskDetail = document.getElementById("task-detail");
     const listTaskDetail = document.getElementById("list-task-detail");
@@ -748,9 +763,12 @@ async function saveTask() {
   }
 }
 
+let editingSubtaskParentId = null;
+
 async function editTask(id) {
   try {
     const task = await api(`/tasks/${id}`);
+    editingSubtaskParentId = task.parent_task_id || null;
     showTaskModal(task);
   } catch (err) {
     alert(err.message);
@@ -1530,12 +1548,12 @@ async function loadSubtasks(parentId, containerId = "subtasks-list") {
       return;
     }
     container.innerHTML = `<div class="subtasks-sortable" data-parent-id="${parentId}">` + subtasks.map((st) => `
-      <div class="subtask-item" data-task-id="${st.id}" draggable="true">
+      <div class="subtask-item" data-task-id="${st.id}">
         <span class="drag-handle" aria-label="Drag to reorder">⠿</span>
         <input type="checkbox" class="subtask-checkbox" ${st.status === "COMPLETE" ? "checked" : ""}
           onclick="event.stopPropagation(); toggleSubtaskStatus(${st.id}, '${st.status}', ${parentId}, '${containerId}')"
           aria-label="Mark ${st.status === 'COMPLETE' ? 'incomplete' : 'complete'}">
-        <span class="subtask-title ${st.status === "COMPLETE" ? "subtask-done" : ""}" onclick="viewTask(${st.id})" style="cursor: pointer;">${escapeHtml(st.title)}</span>
+        <span class="subtask-title ${st.status === "COMPLETE" ? "subtask-done" : ""}" onclick="editTask(${st.id})">${escapeHtml(st.title)}</span>
         ${st.time_estimate_minutes ? `<span class="subtask-time">⏱ ${st.time_estimate_minutes} min</span>` : ""}
       </div>
     `).join("") + "</div>";
@@ -1566,6 +1584,18 @@ function initSubtaskDragAndDrop(parentId, containerId) {
 
   let draggedEl = null;
 
+  // Make items draggable only when the handle is grabbed
+  container.addEventListener("mousedown", (e) => {
+    const handle = e.target.closest(".drag-handle");
+    if (!handle) return;
+    const item = handle.closest(".subtask-item");
+    if (item) item.setAttribute("draggable", "true");
+  });
+
+  container.addEventListener("mouseup", () => {
+    container.querySelectorAll(".subtask-item[draggable]").forEach((el) => el.removeAttribute("draggable"));
+  });
+
   // --- Desktop drag events ---
   container.addEventListener("dragstart", (e) => {
     const item = e.target.closest(".subtask-item");
@@ -1578,9 +1608,13 @@ function initSubtaskDragAndDrop(parentId, containerId) {
   container.addEventListener("dragend", () => {
     if (draggedEl) {
       draggedEl.classList.remove("dragging");
+      draggedEl.removeAttribute("draggable");
       draggedEl = null;
     }
-    container.querySelectorAll(".subtask-item").forEach((el) => el.classList.remove("drag-over"));
+    container.querySelectorAll(".subtask-item").forEach((el) => {
+      el.classList.remove("drag-over");
+      el.removeAttribute("draggable");
+    });
     saveSubtaskOrder(parentId, containerId);
   });
 
