@@ -868,6 +868,10 @@ header h1 {
   .home-task-card.task-card {
     border-right: 4px solid var(--effort-color, var(--border));
   }
+
+  .home-task-card.task-card.home-task-completed {
+    border-right: 2px solid var(--success);
+  }
 }
 
 .text-muted {
