@@ -838,7 +838,8 @@ header h1 {
 
 /* Home top task: responsive overrides for small screens.
    Title wraps fully, action button stays right,
-   priority badge + meta hidden (color accent on tile border remains). */
+   priority badge + meta hidden (color accent on tile border remains).
+   Right border shows effort level. */
 @media (max-width: 768px) {
   .home-task-card .home-task-main {
     display: flex;
@@ -861,6 +862,11 @@ header h1 {
     text-overflow: unset;
     line-height: 1.35;
     font-size: 0.95rem;
+  }
+
+  /* Effort accent on right edge via CSS custom property */
+  .home-task-card.task-card {
+    border-right: 4px solid var(--effort-color, var(--border));
   }
 }
 

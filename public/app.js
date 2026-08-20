@@ -231,7 +231,7 @@ function renderStreakImmediate(streak, completedToday) {
 function renderCompletedHomeCard(task) {
   const container = document.getElementById("home-top-task-content");
   container.innerHTML = `
-    <div class="task-card priority-${task.priority} home-task-card home-task-completed" id="home-top-task-card" style="pointer-events: none;">
+    <div class="task-card priority-${task.priority} effort-${task.effort} home-task-card home-task-completed" id="home-top-task-card" style="pointer-events: none; --effort-color: ${task.effort === 'HIGH' ? '#7c3aed' : task.effort === 'MEDIUM' ? '#a78bfa' : '#ddd6fe'};">
       <div class="home-task-main">
         <span class="badge badge-priority-${task.priority} home-task-priority">${task.priority}</span>
         <span class="home-task-title">${escapeHtml(task.title)}</span>
@@ -273,7 +273,7 @@ async function loadTopTask() {
     }
 
     container.innerHTML = `
-      <div class="task-card priority-${task.priority} home-task-card" id="home-top-task-card" onclick="viewTask(${task.id}); switchToTab('tasks')" style="cursor: pointer;">
+      <div class="task-card priority-${task.priority} effort-${task.effort} home-task-card" id="home-top-task-card" onclick="viewTask(${task.id}); switchToTab('tasks')" style="cursor: pointer; --effort-color: ${task.effort === 'HIGH' ? '#7c3aed' : task.effort === 'MEDIUM' ? '#a78bfa' : '#ddd6fe'};">
         <div class="home-task-main">
           <span class="badge badge-priority-${task.priority} home-task-priority">${task.priority}</span>
           <span class="home-task-title">${escapeHtml(task.title)}</span>
